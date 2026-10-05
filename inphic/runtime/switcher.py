@@ -16,6 +16,7 @@ import time
 
 from inphic.config import AppConfig
 from inphic.runtime.channel import HidChannel
+from inphic.profile import describe_status_change
 from inphic.protocol.status import StatusReport, battery_of
 from inphic.runtime.foreground import get_foreground_process_name
 from inphic.runtime.monitor import BatteryTracker, StatusMonitor
@@ -75,6 +76,10 @@ class ProfileSwitcher:
     def _on_status(self, report: StatusReport) -> None:
         bat = battery_of(report)
         if bat is None:
+            current = self.config.profiles.get(self.applied or self.desired)
+            text = describe_status_change(report, current.profile if current else None)
+            if text:
+                LOG.info(text)
             return
         for level, text in self._battery.update(bat):
             LOG.log(logging.WARNING if level == "warning" else logging.INFO, text)

@@ -204,3 +204,30 @@ class SwitcherBluetooth(unittest.TestCase):
         with self.assertLogs("inphic.switcher", level="WARNING"):
             self.s._poll_presence(100.0)
         self.assertFalse(self.s._was_present)
+
+
+class SwitcherStatusLog(unittest.TestCase):
+    def setUp(self):
+        self.sw = _load_switcher(FakeHid())
+        cfg = load_config(ROOT / "config.yaml")
+        cfg.raw["device"].pop("bluetooth", None)
+        self.s = self.sw.ProfileSwitcher(cfg)
+        self.s.applied = "default"
+
+    def _report(self, kind, a, b=0):
+        from inphic.protocol.status import StatusReport
+        return StatusReport(kind=kind, a=a, b=b)
+
+    def test_dpi_key_press_is_logged_with_dpi_value(self):
+        with self.assertLogs("inphic.switcher", level="INFO") as logs:
+            self.s._on_status(self._report(0x10, 3))          # 第 3 档
+        self.assertIn("第 3 档 = 3200 DPI", logs.output[0])
+
+    def test_out_of_range_dpi_stage_reported_not_crashed(self):
+        with self.assertLogs("inphic.switcher", level="INFO") as logs:
+            self.s._on_status(self._report(0x10, 9))
+        self.assertIn("超出", logs.output[0])
+
+    def test_unknown_kind_is_silent(self):
+        with self.assertNoLogs("inphic.switcher", level="INFO"):
+            self.s._on_status(self._report(0x99, 1))

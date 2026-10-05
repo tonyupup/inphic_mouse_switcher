@@ -72,6 +72,29 @@ def describe_dpi(p: HubProfile) -> str:
     return f"当前第 {cur + 1} 档 = {p.dpi(cur)} · " + " / ".join(stages) + tail
 
 
+def describe_status_change(report, p: HubProfile | None) -> str | None:
+    """鼠标主动上报的非电量状态 -> 一句中文; 不认识的类型返回 None。
+
+    DPI 档位(类型 0x10, 数值 = 档位+1)来自 HUB 的 FUN_004600f0; 没有抓包/真机验证过。
+    回报率(0x20)、灯光模式(0x70)的数值含义没核实, 只报原始值。
+    """
+    from inphic.protocol.status import KIND_DPI_STAGE, KIND_LIGHT_MODE, KIND_POLLING_RATE
+
+    if report.kind == KIND_DPI_STAGE:
+        stage = report.value - 1
+        if not 0 <= stage < DPI_LEVELS:
+            return f"收到 DPI 档位上报, 但数值 {report.value} 超出 1..{DPI_LEVELS}"
+        if p is None:
+            return f"DPI 档位切换到第 {stage + 1} 档"
+        note = "" if p.dpi_enabled(stage) else "（该档在当前方案里未启用）"
+        return f"DPI 档位切换到第 {stage + 1} 档 = {p.dpi(stage)} DPI{note}"
+    if report.kind == KIND_POLLING_RATE:
+        return f"鼠标上报回报率变化（原始值 {report.value:#06x}）"
+    if report.kind == KIND_LIGHT_MODE:
+        return f"鼠标上报灯光模式变化（原始值 {report.value:#06x}）"
+    return None
+
+
 def describe_performance(p: HubProfile) -> str:
     return " · ".join([
         f"休眠 {_num(p.sleep_minutes)} 分钟",

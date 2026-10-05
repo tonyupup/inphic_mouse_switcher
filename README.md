@@ -18,7 +18,7 @@ uv run python -m inphic macros list       # 看宏库里有哪些宏（只读）
 
 | 命令 | 作用 |
 |---|---|
-| `python -m inphic run [-c 配置]` | 启动先用中文打印当前设置，然后监听前台程序、切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用；电量变化实时写进日志（≤20%、≤10% 各警告一次） |
+| `python -m inphic run [-c 配置]` | 启动先用中文打印当前设置，然后监听前台程序、切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用；电量变化实时写进日志（≤20%、≤10% 各警告一次）；按鼠标上的 DPI 键会记一行「DPI 档位切换到第 N 档 = X DPI」 |
 | `python -m inphic show [-c 配置] [--payloads]` | 只打印上面那份中文设置摘要，不连鼠标（★ = 与出厂默认不同的按钮）；`--payloads` 另外打印将要发送的字节（干跑） |
 | `python -m inphic status [--watch] [--via bluetooth]` | 读鼠标主动上报的状态（电量等）；`--watch` 持续打印，可观察 DPI 键；蓝牙时不能和 HUB / `run` 同时用 |
 | `python -m inphic macros list \| show <分组.名字>` | 查看宏库，展开后的步骤、占几个槽位、播放多久 |

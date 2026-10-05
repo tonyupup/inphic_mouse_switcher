@@ -302,3 +302,32 @@ class PerformanceSettings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApplyPayloads(unittest.TestCase):
+    """build_apply_payloads: 蓝牙下写进 FEE3 的原始载荷, 和 2.4G 的帧序列同源。"""
+
+    def test_payload_order_and_polling_switch(self):
+        from inphic.profile import build_apply_payloads, from_config
+
+        p = from_config("t", {"polling_rate": 1000}).profile
+        self.assertEqual([x[0] for x in build_apply_payloads(p)], [0x0C, 0x04, 0x05, 0x06, 0x07, 0x08])
+        self.assertEqual(
+            [x[0] for x in build_apply_payloads(p, include_polling=False)], [0x0C, 0x04, 0x05, 0x07, 0x08]
+        )
+
+    def test_frames_are_derived_from_payloads(self):
+        from inphic.profile import build_apply_payloads, build_apply_sequence, from_config
+        from inphic.protocol.frame import parse_frame
+
+        p = from_config("t", {"light": {"mode": "static", "rgb": [1, 2, 3]}}).profile
+        self.assertEqual([parse_frame(f) for f in build_apply_sequence(p)], build_apply_payloads(p))
+
+    def test_macro_payload_is_one_111_byte_message(self):
+        from inphic.profile import build_apply_payloads, build_apply_sequence, from_config
+
+        cfg = {"buttons": {"side_front": {"type": "macro", "start": "loop", "steps": [{"tap": "a"}]}}}
+        p = from_config("t", cfg).profile
+        macro = [x for x in build_apply_payloads(p) if x[0] == 0x09]
+        self.assertEqual([len(x) for x in macro], [111])                    # 蓝牙整条一次写
+        self.assertEqual(len(build_apply_sequence(p)), 6 + 2)               # 2.4G 拆成两个分片帧

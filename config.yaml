@@ -10,6 +10,11 @@ device:                   # 鼠标的 USB 标识，一般不用改
   product_id: 0xFA65
   usage_page: 0xFF00
   usage: 1
+  # 蓝牙：鼠标连着蓝牙时，通过蓝牙配置鼠标（接收器可以一直插着，鼠标一次只用一条连接）。
+  # 注意：蓝牙下回报率设置无效（官方也一样）；蓝牙连接时要先退出 INPHIC HUB / Inphic.exe，否则会被拒绝访问。
+  # connection: auto           # auto = 蓝牙连着用蓝牙，否则用接收器；也可写 dongle（只用接收器）/ bluetooth（只用蓝牙）
+  bluetooth:
+    address: "78:87:11:75:9D:56"     # 鼠标的蓝牙地址（Inphic IN10）
 
 # 宏库：宏放在 macros 目录下的 yaml 文件里，按分组整理（详见 docs/配置说明.md 第 4 节）。
 # 看有哪些宏： uv run python -m inphic macros list

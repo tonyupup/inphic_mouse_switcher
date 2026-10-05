@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import warnings
 
-from inphic.profile.commands import build_apply_sequence
+from inphic.profile.commands import build_apply_sequence, build_apply_payloads
 from inphic.profile.model import (
     BUTTON_COUNT, BUTTON_NAMES, DPI_LEVELS, DPI_MAX, DPI_MIN, DPI_STEP, LIGHT_MODE_NAMES, LIGHT_MODE_PARAMS,
     LIGHT_MODES, POLLING_RATES, HubProfile,
@@ -195,7 +195,12 @@ class ConfiguredProfile:
         self.profile = profile
 
     def build_packets(self) -> list[bytes]:
+        """2.4G(HID)下发送的 64 字节帧。"""
         return build_apply_sequence(self.profile)
+
+    def build_payloads(self, *, include_polling: bool = True) -> list[bytes]:
+        """蓝牙(BLE)下写进 FEE3 的原始载荷; 蓝牙不支持改回报率, 调用方传 include_polling=False。"""
+        return build_apply_payloads(self.profile, include_polling=include_polling)
 
     def current_buttons(self) -> dict[str, str]:
         return {name: self.profile.describe_button(idx) for name, idx in BUTTON_NAMES.items()}

@@ -15,7 +15,7 @@ from inphic.profile.model import (
 )
 from inphic.protocol.frame import build_frame, put_sum16
 from inphic.protocol.functions import FUNCTION_WIRE
-from inphic.protocol.macro import SLOT_BASE, macro_frames
+from inphic.protocol.macro import SLOT_BASE, encode_macro, message_frames
 
 
 # ---------------- 命令构造器: 都返回 payload (payload[0]=命令, payload[1]=长度) ----------------
@@ -103,16 +103,29 @@ def cmd_keymap(p: HubProfile) -> bytes:
     return bytes(pl)
 
 
-def build_apply_sequence(p: HubProfile) -> list[bytes]:
-    """完整应用一个方案: 与 FUN_004612a0(which=0) 的发送顺序一致, 返回 64 字节帧列表。
+def build_apply_payloads(p: HubProfile, *, include_polling: bool = True) -> list[bytes]:
+    """完整应用一个方案要发的命令载荷(未分帧、无校验外壳), 顺序与 FUN_004612a0(which=0) 一致:
+    0x0c, 0x04, 0x05, 0x06, 0x07, 0x08, 然后是宏消息(每条 111 字节, 按按钮序号)。
 
-    注意顺序: 0x0c, 0x04, 0x05, 0x06, 0x07, 0x08 —— 与抓包里的包序一致(包序在抓包里是
-    0c,04,05,06,07,08)。宏数据(FUN_00461c90)接在最后。
-    """
-    payloads = [cmd_begin(), cmd_dpi(p), cmd_light(p), cmd_polling_rate(p), cmd_misc07(p), cmd_keymap(p)]
-    frames = [build_frame(pl) for pl in payloads]
-    # 宏数据放在最后, 按按钮序号(与 HUB 一致); 抓包里宏帧也是紧跟在按键表之后
+    蓝牙(BLE)下 HUB 直接把这些载荷写进 FEE3 特征值, 且不发 0x06(回报率), 所以 include_polling=False。"""
+    payloads = [cmd_begin(), cmd_dpi(p), cmd_light(p)]
+    if include_polling:
+        payloads.append(cmd_polling_rate(p))
+    payloads += [cmd_misc07(p), cmd_keymap(p)]
     for i in sorted(p.macros):
         mc = p.macros[i]
-        frames += macro_frames(list(mc.events), SLOT_BASE[i], mc.repeat, mc.mode)
+        payloads += encode_macro(list(mc.events), SLOT_BASE[i], mc.repeat, mc.mode)
+    return payloads
+
+
+def build_apply_sequence(p: HubProfile) -> list[bytes]:
+    """2.4G 接收器(HID)下的完整发送序列, 返回 64 字节帧列表: 普通命令一帧, 宏消息拆成两个分片帧。
+
+    顺序与抓包里的包序一致(0c,04,05,06,07,08), 宏帧紧跟在按键表之后。"""
+    frames: list[bytes] = []
+    for payload in build_apply_payloads(p):
+        if payload[0] == 0x09:
+            frames += message_frames(payload)
+        else:
+            frames.append(build_frame(payload))
     return frames

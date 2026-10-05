@@ -48,6 +48,10 @@ def open_collection(vendor_id: int, product_id: int, **match):
 class HidChannel:
     """到鼠标配置集合的连接: 懒打开、串行发送帧、写失败就丢掉句柄下次重开。"""
 
+    kind = "dongle"
+    label = "2.4G 接收器"
+    supports_polling_rate = True
+
     def __init__(self, vendor_id: int, product_id: int, usage_page: int, usage: int):
         self.vendor_id = vendor_id
         self.product_id = product_id
@@ -87,6 +91,10 @@ class HidChannel:
             except Exception:
                 self._drop_device()
                 raise
+
+    def send_profile(self, profile, delay_s: float) -> None:
+        """把方案按 2.4G 的帧格式(64 字节帧)发出去。"""
+        self.send_frames(profile.build_packets(), delay_s)
 
     def _drop_device(self):
         if self._dev is not None:

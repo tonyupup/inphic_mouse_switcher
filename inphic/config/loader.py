@@ -8,6 +8,7 @@ import yaml
 
 from inphic.config.macro_library import MacroLibrary, build_library
 from inphic.profile import ConfiguredProfile, from_config
+from inphic.protocol.bluetooth import parse_address
 
 REQUIRED_SECTIONS = ("device", "profiles", "rules")
 
@@ -31,6 +32,16 @@ class AppConfig:
         return self.raw["device"]
 
     @property
+    def bluetooth(self) -> dict | None:
+        """device.bluetooth 段(没写 = 不用蓝牙)。"""
+        return self.raw["device"].get("bluetooth")
+
+    @property
+    def connection(self) -> str:
+        """auto(接收器优先, 其次蓝牙) / dongle / bluetooth。"""
+        return self.raw["device"].get("connection", "auto")
+
+    @property
     def rules(self) -> list[dict]:
         return self.raw["rules"]
 
@@ -44,6 +55,24 @@ class AppConfig:
             if rule["process"] == "*":
                 return rule["profile"]
         return None
+
+
+CONNECTIONS = ("auto", "dongle", "bluetooth")
+
+
+def _check_device(dev, config_path) -> None:
+    if not isinstance(dev, dict):
+        raise ValueError(f"{config_path}: device 需要是字典")
+    conn = dev.get("connection", "auto")
+    if conn not in CONNECTIONS:
+        raise ValueError(f"{config_path}: device.connection 是 {conn!r}, 可选: {', '.join(CONNECTIONS)}")
+    bt = dev.get("bluetooth")
+    if bt is not None:
+        if not isinstance(bt, dict) or not bt.get("address"):
+            raise ValueError(f"{config_path}: device.bluetooth 需要写 address（如 78:87:11:75:9D:56）")
+        parse_address(str(bt["address"]))
+    elif conn == "bluetooth":
+        raise ValueError(f"{config_path}: device.connection 是 bluetooth, 但没有 device.bluetooth.address")
 
 
 def load_config(config_path="config.yaml") -> AppConfig:
@@ -65,6 +94,8 @@ def load_config(config_path="config.yaml") -> AppConfig:
         build_library(raw["macro_files"], config_path.parent) if raw.get("macro_files") else None
     )
     profiles = {name: from_config(name, pdef or {}, library) for name, pdef in raw["profiles"].items()}
+
+    _check_device(raw["device"], config_path)
 
     for rule in raw["rules"]:
         if rule.get("profile") not in profiles:

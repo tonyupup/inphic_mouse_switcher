@@ -31,9 +31,25 @@ class ProfileSwitcher:
         self.config = config
         self._foreground = foreground
         dev_cfg = config.device
-        self.channel = HidChannel(
+        self.channel = HidChannel(                                 # 2.4G 接收器
             dev_cfg["vendor_id"], dev_cfg["product_id"], dev_cfg["usage_page"], dev_cfg["usage"]
         )
+        self.ble = None                                            # 蓝牙(配置了 device.bluetooth 才有)
+        bt = config.bluetooth
+        if bt and config.connection != "dongle":
+            from inphic.runtime.ble import BleChannel              # 延迟导入: 需要 Windows 的 winrt-* 包
+            self.ble = BleChannel(
+                str(bt["address"]), packet_delay_ms=bt.get("packet_delay_ms", 200),
+                listener=self._on_status, on_disconnect=self._on_ble_disconnect,
+            )
+        # 检测顺序 = 优先级。蓝牙在前: 鼠标走蓝牙时 2.4G 接收器仍插在电脑上(它的 HID 设备一直在),
+        # 只有蓝牙连接状态才能说明鼠标此刻在用哪条链路; 鼠标一次只用一条。
+        self.channels = {}
+        if self.ble is not None:
+            self.channels["bluetooth"] = self.ble
+        if config.connection != "bluetooth":
+            self.channels["dongle"] = self.channel
+        self.kind = None               # 当前在用的连接方式: dongle / bluetooth / None
         self.desired = None            # 按前台程序应该用的方案
         self.applied = None            # 已经成功写进鼠标的方案
         self._applying = False
@@ -42,9 +58,19 @@ class ProfileSwitcher:
         self._was_present = True
         self._next_presence_check = 0.0
         self._battery = BatteryTracker()
-        self.monitor = StatusMonitor(
+        self.monitor = StatusMonitor(                              # 接收器下读状态(蓝牙的状态通知走 BleChannel)
             dev_cfg["vendor_id"], dev_cfg["product_id"], self._on_status, on_disconnect=self._battery.reset
         )
+
+    def _on_ble_disconnect(self) -> None:
+        self._battery.reset()
+
+    def _detect(self) -> str | None:
+        """当前鼠标在用的连接方式: 蓝牙连着就是蓝牙, 否则看接收器。"""
+        for kind, ch in self.channels.items():
+            if ch.is_present():
+                return kind
+        return None
 
     def _on_status(self, report: StatusReport) -> None:
         bat = battery_of(report)
@@ -55,7 +81,8 @@ class ProfileSwitcher:
 
     def close(self) -> None:
         self.monitor.stop()
-        self.channel.close()
+        for ch in self.channels.values():
+            ch.close()
 
     def _start_apply(self, name: str):
         profile = self.config.profiles.get(name)
@@ -68,8 +95,12 @@ class ProfileSwitcher:
 
         def worker():
             try:
-                LOG.info("切换到方案「%s」", name)
-                self.channel.send_frames(profile.build_packets(), delay_s)
+                kind = self.kind or self._detect() or next(iter(self.channels))
+                ch = self.channels[kind]
+                LOG.info("切换到方案「%s」（%s）", name, ch.label)
+                if not ch.supports_polling_rate:
+                    LOG.info("%s下回报率设置无效, 已跳过回报率命令", ch.label)
+                ch.send_profile(profile, delay_s if kind == "dongle" else None)
                 with self._state_lock:
                     self.applied = name
                 LOG.info("方案「%s」应用完成", name)
@@ -93,20 +124,30 @@ class ProfileSwitcher:
         if now < self._next_presence_check or self._applying:
             return
         self._next_presence_check = now + self.PRESENCE_CHECK_S
-        present = self.channel.is_present()
+        kind = self._detect()
+        present = kind is not None
         if present and not self._was_present:
             LOG.info("检测到鼠标重新连接, 重新应用当前方案")
             with self._state_lock:
                 self.applied = None
         elif self._was_present and not present:
             LOG.warning("鼠标已断开, 等待重新连接")
+        if present and kind != self.kind:
+            LOG.info("连接方式: %s", self.channels[kind].label)
+            if self.kind is not None:
+                with self._state_lock:
+                    self.applied = None                  # 换了连接方式(如接收器 → 蓝牙), 要重新应用
+            if self.kind == "bluetooth" and self.ble is not None:
+                self.ble.release()                       # 不再用蓝牙了, 放掉 FEE0
+            self.kind = kind
         self._was_present = present
 
     def run(self):
         poll_interval = self.config.poll_interval_ms / 1000.0
         last_process = object()
         LOG.info("开始监听前台窗口切换 (Ctrl+C 退出)")
-        self.monitor.start()
+        if "dongle" in self.channels:
+            self.monitor.start()
         while True:
             process_name = self._foreground()
             if process_name != last_process:

@@ -76,9 +76,11 @@ def describe_status_change(report, p: HubProfile | None) -> str | None:
     """鼠标主动上报的非电量状态 -> 一句中文; 不认识的类型返回 None。
 
     DPI 档位(类型 0x10, 数值 = 档位+1)来自 HUB 的 FUN_004600f0; 没有抓包/真机验证过。
-    回报率(0x20)、灯光模式(0x70)的数值含义没核实, 只报原始值。
+    回报率(0x20)、灯光模式(0x70)、0x60、0x80 的数值含义没核实, 只报原始值; 0x50 按 HUB 的用法解释为命令应答。
     """
-    from inphic.protocol.status import KIND_DPI_STAGE, KIND_LIGHT_MODE, KIND_POLLING_RATE
+    from inphic.protocol.status import (
+        KIND_COMMAND_ACK, KIND_DPI_STAGE, KIND_LEVEL, KIND_LIGHT_MODE, KIND_POLLING_RATE, KIND_PROFILE_SLOT,
+    )
 
     if report.kind == KIND_DPI_STAGE:
         stage = report.value - 1
@@ -90,6 +92,13 @@ def describe_status_change(report, p: HubProfile | None) -> str | None:
         return f"DPI 档位切换到第 {stage + 1} 档 = {p.dpi(stage)} DPI{note}"
     if report.kind == KIND_POLLING_RATE:
         return f"鼠标上报回报率变化（原始值 {report.value:#06x}）"
+    if report.kind == KIND_COMMAND_ACK:
+        ok = "成功" if report.a == 0 else f"非零(低字节 {report.a:#04x})"
+        return f"鼠标上报命令应答: {ok}（依据 HUB 反编译推断, 未在真机确认）"
+    if report.kind == KIND_LEVEL:
+        return f"鼠标上报 0x60 档位值 {report.value}（HUB 存 1..10 的值, 含义未确认）"
+    if report.kind == KIND_PROFILE_SLOT:
+        return f"鼠标上报 0x80 方案槽 {report.value}（HUB 收到 1..5 会存档, 含义未确认）"
     if report.kind == KIND_LIGHT_MODE:
         return f"鼠标上报灯光模式变化（原始值 {report.value:#06x}）"
     return None

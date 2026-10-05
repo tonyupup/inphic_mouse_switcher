@@ -32,13 +32,19 @@ STATUS_MARKER = 0x93
 KIND_DPI_STAGE = 0x10
 KIND_POLLING_RATE = 0x20
 KIND_BATTERY = 0x40
+KIND_COMMAND_ACK = 0x50      # 命令应答? HUB: this+0x158 = (数值低字节 == 0), 发送函数据此决定要不要重发
+KIND_LEVEL = 0x60            # HUB: 数值 1..10 存进 this+0xfc(含义未确认)
 KIND_LIGHT_MODE = 0x70
+KIND_PROFILE_SLOT = 0x80     # HUB: 数值 1..5 只触发存档, 不赋值(含义未确认)
 
 KIND_NAMES = {
     KIND_DPI_STAGE: "dpi_stage",
     KIND_POLLING_RATE: "polling_rate",
     KIND_BATTERY: "battery",
     KIND_LIGHT_MODE: "light_mode",
+    KIND_COMMAND_ACK: "command_ack",
+    KIND_LEVEL: "level",
+    KIND_PROFILE_SLOT: "profile_slot",
 }
 
 

@@ -63,3 +63,12 @@ class Reading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HubHandlerKinds(unittest.TestCase):
+    """HUB 的 FUN_004600f0 处理的 7 种类型都要有名字, 不能落到 unknown。"""
+
+    def test_all_hub_kinds_are_named(self):
+        for kind in (0x10, 0x20, 0x40, 0x50, 0x60, 0x70, 0x80):
+            rep = parse_report(bytes([0x03, 0x93, kind, 0x01, 0x00]))
+            self.assertFalse(rep.name.startswith("unknown"), hex(kind))

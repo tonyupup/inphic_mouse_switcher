@@ -2,27 +2,23 @@
 
 import unittest
 import warnings
-import zlib
-from pathlib import Path
 
-import yaml
-
-from hub_profile import (
+from inphic.profile import (
     LIGHT_MODE_PARAMS, LIGHT_MODES, PROFILE_SIZE, HubProfile, build_apply_sequence, cmd_keymap, cmd_light, cmd_polling_rate, from_config,
 )
-from hid_keycodes import key_to_code
-from hub_functions import MEDIA_ACTIONS, MOUSE_ACTIONS, SHORTCUT_ACTIONS
-from mouse_protocol import build_frame, parse_frame
+from inphic.protocol.keycodes import key_to_code
+from inphic.protocol.functions import MEDIA_ACTIONS, MOUSE_ACTIONS, SHORTCUT_ACTIONS
+from inphic.protocol.frame import build_frame, parse_frame
+from tests.support import profile_switch_frames, profiles_5_6
 
-HERE = Path(__file__).parent
-_blob = zlib.decompress((HERE / "profiles_5_6.bin.z").read_bytes())
+_blob = profiles_5_6()
 DEFAULT = HubProfile(bytearray(_blob[:PROFILE_SIZE]))
 CF = HubProfile(bytearray(_blob[PROFILE_SIZE:]))
-TEMPLATES = yaml.safe_load((HERE.parent / "templates.yaml").read_text(encoding="utf-8"))
+CAPTURED = profile_switch_frames()
 
 
 def _tpl(name):
-    return [bytes.fromhex(h) for h in TEMPLATES[name]]
+    return CAPTURED[name]
 
 
 class AgainstCaptures(unittest.TestCase):

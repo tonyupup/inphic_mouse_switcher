@@ -17,7 +17,7 @@
           [标志|延迟%100, 键码, 延迟//100, 0x03]            (延迟 >= 128ms)
     移动: [延迟, 0xF6, x_hi, x_lo, y_hi, y_lo]               (延迟 >= 128ms 时末尾再加 [延迟//100, 0x03])
     键码: 键盘用 HID 键码; 鼠标按键用 0xF1 左 / 0xF2 右 / 0xF3 中 / 0xF4 后退 / 0xF5 前进
-分片: 111 字节拆成 59 + 52 两片, 用 mouse_protocol.build_chunk_frame(序号 0 和 1)。
+分片: 111 字节拆成 59 + 52 两片, 用 frame.build_chunk_frame(序号 0 和 1)。
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 
-from hid_keycodes import key_to_code
-from mouse_protocol import build_chunk_frame
+from inphic.protocol.frame import build_chunk_frame
+from inphic.protocol.keycodes import key_to_code
 
 MESSAGE_LEN = 0x6F
 EVENT_AREA = 9                 # M[9] 起是事件

@@ -1,13 +1,13 @@
 """switcher 的失败重试/断线重连逻辑, 用假的 hid 模块, 不碰真实设备。"""
 
-import ctypes
 import importlib
 import sys
-import threading
 import time
 import types
 import unittest
-from pathlib import Path
+
+from inphic.config import load_config
+from tests.support import ROOT
 
 
 class FakeHid(types.ModuleType):
@@ -49,20 +49,18 @@ class FakeHid(types.ModuleType):
 
 
 def _load_switcher(fake_hid):
+    """用假的 hid 模块导入运行时模块(它们在导入时就 import hid, 所以要先清掉缓存)。"""
     sys.modules["hid"] = fake_hid
-    sys.modules.setdefault("psutil", types.ModuleType("psutil"))
-    if not hasattr(ctypes, "windll"):
-        ctypes.windll = types.SimpleNamespace(user32=types.SimpleNamespace())
-    sys.modules.pop("switcher", None)
-    return importlib.import_module("switcher")
+    for name in ("inphic.runtime.channel", "inphic.runtime.switcher"):
+        sys.modules.pop(name, None)
+    return importlib.import_module("inphic.runtime.switcher")
 
 
 class SwitcherRetry(unittest.TestCase):
     def setUp(self):
         self.hid = FakeHid()
         self.sw = _load_switcher(self.hid)
-        from config_loader import load_config
-        cfg = load_config(Path(__file__).parent.parent / "config.hub.yaml")
+        cfg = load_config(ROOT / "config.yaml")
         cfg.raw["packet_delay_ms"] = 0
         self.s = self.sw.ProfileSwitcher(cfg)
 
@@ -84,7 +82,7 @@ class SwitcherRetry(unittest.TestCase):
     def test_failed_write_drops_handle_and_retries_later(self):
         self.hid.write_results = [-1]
         self.s.desired = "cf"
-        with self.assertLogs("mouse_switcher", level="ERROR"):
+        with self.assertLogs("inphic.switcher", level="ERROR"):
             self.s._maybe_apply(); self._wait_idle()
         self.assertIsNone(self.s.applied)              # 失败不能算已应用
         self.assertTrue(self.hid.opened[0].closed)     # 失效句柄被丢弃

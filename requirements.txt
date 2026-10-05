@@ -1,3 +1,0 @@
-hidapi
-psutil
-PyYAML

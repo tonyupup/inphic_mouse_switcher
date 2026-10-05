@@ -1,31 +1,47 @@
-# 这个文件才是你需要改的——改按键绑定、改规则都在这里，不用碰 templates.yaml
+# 鼠标配置。运行: uv run python -m inphic run
+# 每一项怎么写、有哪些可选值，都在 docs/配置说明.md 里，每种用法有一个可以直接复制的例子。
+# 方案里没写的项 = 出厂默认，所以只需要写你想改的。
 
-poll_interval_ms: 150
-packet_delay_ms: 520
+poll_interval_ms: 150     # 多久检查一次前台是哪个程序
+packet_delay_ms: 520      # 往鼠标发配置时，两个包之间的间隔
 
-device:
+device:                   # 鼠标的 USB 标识，一般不用改
   vendor_id: 0x1D57
   product_id: 0xFA65
   usage_page: 0xFF00
   usage: 1
 
+# 宏库：宏放在 macros 目录下的 yaml 文件里，按分组整理（详见 docs/配置说明.md 第 4 节）。
+# 看有哪些宏： uv run python -m inphic macros list
+macro_files:
+  - macros/*.yaml
+
 profiles:
+  # ---- 穿越火线用的方案 ----
   cf:
-    template: cf  # 对应 templates.yaml 里那组抓包(DPI/灯效等), 按钮表会被下面覆盖
-    buttons:
-      middle_click: { type: key, key: "1" }
-      side_back: { type: key, key: "6" }
-      side_front: { type: key, key: "5" }
+    polling_rate: 1000            # 回报率（Hz）
+    light:
+      mode: spectrum_cycle        # 灯光：循环呼吸
+    buttons:                      # 每行：按钮名: { 绑定成什么 }
+      middle_click: { type: key, key: "1" }     # 中键 → 按 1
+      side_back:    { type: key, key: "6" }     # 后退侧键 → 按 6
+      side_front:   { type: key, key: "5" }     # 前进侧键 → 按 5
+      # 想换成别的，把上面某一行改成下面这些之一（去掉开头的 #）：
+      #   side_front: { type: key, key: "c", modifiers: [ctrl] }   # 按 Ctrl+C
+      #   side_front: { type: shortcut, action: copy }             # 复制
+      #   side_front: { type: media, action: volume_up }           # 音量加
+      #   side_front: { type: macro, ref: fps.rapid_fire }         # 运行宏库里的宏
 
+  # ---- 平时用的方案 ----
   default:
-    template: default
-    buttons:
-      middle_click: { type: function, id: 4 }
-      side_back: { type: function, id: 5 }
-      side_front: { type: function, id: 6 }
+    polling_rate: 1000
+    light:
+      mode: off                   # 灯光：关闭
+    # 按钮没写 = 出厂默认
 
+# 切换规则：前台是哪个程序，就用哪个方案。从上往下找，第一个匹配的生效。
 rules:
-  - process: "crossfire.exe"
+  - process: "crossfire.exe"      # 进入穿越火线 → cf 方案
     profile: "cf"
-  - process: "*"
+  - process: "*"                  # 其他所有程序 → default 方案（必须放最后）
     profile: "default"

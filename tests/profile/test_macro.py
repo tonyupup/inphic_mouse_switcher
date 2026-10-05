@@ -2,20 +2,16 @@
 
 import unittest
 import warnings
-from pathlib import Path
 
-from hub_macro import (
+from inphic.protocol.macro import (
     CONTINUE_OPCODE, MESSAGE_LEN, SLOT_BASE, START_MODES, MacroEvent, encode_event, encode_macro,
     macro_frames, message_frames, parse_steps,
 )
-from hub_profile import HubProfile, build_apply_sequence, from_config
-from mouse_protocol import build_frame, parse_chunk_frame
+from inphic.profile import HubProfile, build_apply_sequence, from_config
+from inphic.protocol.frame import parse_chunk_frame
+from tests.support import captured_macro_frames
 
-CAP = {"A": [], "B": [], "M2": [], "M3": [], "M4": []}
-for line in (Path(__file__).parent / "captured_macro_frames.txt").read_text().splitlines():
-    if line and not line.startswith("#"):
-        tag, hexs = line.split()
-        CAP[tag].append(bytes.fromhex(hexs))
+CAP = captured_macro_frames()
 
 STEPS_A = [{"tap": "a", "delay_ms": 50}]
 STEPS_B = [{"tap": "mouse_left"}, {"tap": "mouse_right"}, {"tap": "b"}]

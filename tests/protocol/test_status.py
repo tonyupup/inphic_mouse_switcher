@@ -2,7 +2,7 @@
 
 import unittest
 
-from device_status import (
+from inphic.protocol.status import (
     KIND_BATTERY, KIND_DPI_STAGE, Battery, StatusReport, battery_of, parse_report, read_battery, read_reports,
 )
 

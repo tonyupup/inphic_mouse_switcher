@@ -1,6 +1,6 @@
 [project]
 name = "inphic-switcher"
-version = "0.1.0"
+version = "0.2.0"
 description = "Inphic IN 系列鼠标的自定义驱动: 前台程序切换配置, 直接构造设备命令, 不依赖官方 HUB"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,5 +10,5 @@ dependencies = [
 ]
 
 [tool.uv]
-# 脚本式项目: 模块是平铺的 .py 文件, 不打包, 只用 uv 管理环境和依赖
+# 不打包: 代码在 inphic/ 包里, 从项目根目录用 `uv run python -m inphic ...` 直接运行; uv 只负责环境和依赖
 package = false

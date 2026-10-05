@@ -26,7 +26,7 @@ HID_KEYCODES = {
 def key_to_code(key: str) -> int:
     k = key.strip().lower()
     if k not in HID_KEYCODES:
-        raise ValueError(f"不认识的键名: {key!r}，可以在 hid_keycodes.py 里加")
+        raise ValueError(f"不认识的键名: {key!r}，可以在 inphic/protocol/keycodes.py 里加")
     return HID_KEYCODES[k]
 
 

@@ -5,13 +5,11 @@ import unittest
 import warnings
 from pathlib import Path
 
-from config_loader import load_config
-from hub_macro import SLOT_BASE
-from hub_profile import from_config
-from macro_library import MacroLibrary, build_library
-from tests.test_macro import CAP
+from inphic.config import MacroLibrary, build_library, load_config
+from inphic.profile import from_config
+from tests.support import ROOT as REPO, captured_macro_frames
 
-REPO = Path(__file__).parent.parent
+CAP = captured_macro_frames()
 
 
 class Base(unittest.TestCase):
@@ -190,7 +188,7 @@ rules: [ { process: "*", profile: p } ]
 
 class RepoExamples(unittest.TestCase):
     def test_shipped_config_and_macro_files_load(self):
-        cfg = load_config(REPO / "config.hub.yaml")
+        cfg = load_config(REPO / "config.yaml")
         self.assertIn("fps.rapid_fire", cfg.macro_library.names())
         d = cfg.macro_library.resolve("fps.rapid_fire")
         self.assertEqual((d.start, len(d.steps)), ("hold", 2))
@@ -204,7 +202,7 @@ class RepoExamples(unittest.TestCase):
                 self.assertGreaterEqual(len(p.build_packets()), 8, fq)
 
     def test_live_profiles_unchanged(self):
-        cfg = load_config(REPO / "config.hub.yaml")
+        cfg = load_config(REPO / "config.yaml")
         self.assertEqual(cfg.profiles["cf"].current_buttons()["side_front"], "5")
         self.assertEqual(cfg.profiles["default"].profile.light_mode, 0)
         self.assertEqual(cfg.profiles["cf"].profile.light_mode, 4)

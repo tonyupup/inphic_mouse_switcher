@@ -38,7 +38,7 @@ from pathlib import Path
 
 import yaml
 
-from hub_macro import START_MODES
+from inphic.protocol.macro import START_MODES
 
 _DEF_KEYS = {"steps", "start", "repeat", "default_delay_ms", "description"}
 _USE_KEYS = {"use", "times"}
@@ -50,7 +50,7 @@ MAX_EXPANDED_STEPS = 5000
 
 @dataclass(frozen=True)
 class MacroDef:
-    """展开后的宏: steps 里每一步都是完整的、带显式 delay_ms 的普通步骤, 可直接交给 hub_macro.parse_steps。"""
+    """展开后的宏: steps 里每一步都是完整的、带显式 delay_ms 的普通步骤, 可直接交给 protocol.macro.parse_steps。"""
     name: str                  # "分组.名字"
     steps: tuple
     start: str = "loop"
@@ -217,7 +217,7 @@ class MacroLibrary:
 
     def validate_all(self) -> None:
         """加载完所有文件后调用: 逐个展开并用真正的解析器检查, 配置错误在启动时就暴露而不是用到才报。"""
-        from hub_macro import parse_steps
+        from inphic.protocol.macro import parse_steps
         for fq in self.names():
             d = self.resolve(fq)
             try:

@@ -85,3 +85,28 @@ class BleChannelTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WinrtApiShape(unittest.TestCase):
+    """假会话测不到 winrt 的方法名/参数个数(上次就栽在这); 装了 winrt 的机器上核对 WinrtSession 用到的接口。不碰设备。"""
+
+    def test_methods_used_by_session_exist(self):
+        try:
+            from winrt.windows.devices.bluetooth import BluetoothLEDevice
+            from winrt.windows.devices.bluetooth.genericattributeprofile import (
+                GattCharacteristic, GattDeviceService, GattWriteOption,
+            )
+            from winrt.windows.storage.streams import DataReader, DataWriter
+        except ImportError:
+            self.skipTest("没有安装 winrt-*(非 Windows)")
+        for cls, names in (
+            (BluetoothLEDevice, ["from_bluetooth_address_async", "get_gatt_services_for_uuid_async"]),
+            (GattDeviceService, ["get_characteristics_for_uuid_async"]),
+            (GattCharacteristic, ["write_value_with_result_and_option_async", "add_value_changed",
+                                  "remove_value_changed", "write_client_characteristic_configuration_descriptor_async"]),
+            (DataWriter, ["write_bytes", "detach_buffer"]),
+            (DataReader, ["from_buffer", "read_byte"]),
+        ):
+            for name in names:
+                self.assertTrue(hasattr(cls, name), f"{cls.__name__}.{name} 不存在")
+        self.assertEqual(int(GattWriteOption.WRITE_WITH_RESPONSE), 0)

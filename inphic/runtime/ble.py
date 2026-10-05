@@ -85,7 +85,9 @@ class WinrtSession:
 
         writer = DataWriter()
         writer.write_bytes(bytearray(payload))
-        res = await self.write_char.write_value_with_result_async(writer.detach_buffer(), GattWriteOption.WRITE_WITH_RESPONSE)
+        res = await self.write_char.write_value_with_result_and_option_async(
+            writer.detach_buffer(), GattWriteOption.WRITE_WITH_RESPONSE
+        )
         if int(res.status) != SUCCESS:
             raise RuntimeError(f"写 FEE3 失败(状态 {int(res.status)}, 协议错误码 {res.protocol_error})")
 

@@ -93,8 +93,8 @@ def describe_status_change(report, p: HubProfile | None) -> str | None:
     if report.kind == KIND_POLLING_RATE:
         return f"鼠标上报回报率变化（原始值 {report.value:#06x}）"
     if report.kind == KIND_COMMAND_ACK:
-        ok = "成功" if report.a == 0 else f"非零(低字节 {report.a:#04x})"
-        return f"鼠标上报命令应答: {ok}（依据 HUB 反编译推断, 未在真机确认）"
+        ok = "成功" if report.a == 0 else f"失败（结果 {report.a:#04x}）"
+        return f"鼠标应答命令 {report.b:#04x}: {ok}"        # 真机确认: 93 50 00 <命令字>, 每条写入各回一个
     if report.kind == KIND_LEVEL:
         return f"鼠标上报 0x60 档位值 {report.value}（HUB 存 1..10 的值, 含义未确认）"
     if report.kind == KIND_PROFILE_SLOT:

@@ -256,6 +256,6 @@ class SwitcherStatusLog(unittest.TestCase):
 
     def test_command_ack_is_described(self):
         with self.assertLogs("inphic.switcher", level="INFO") as logs:
-            self.s._on_status(self._report(0x50, 0))
-        self.assertIn("命令应答", logs.output[0])
+            self.s._on_status(self._report(0x50, 0, 0x08))
+        self.assertIn("应答命令 0x08: 成功", logs.output[0])
         self.assertNotIn("未识别", logs.output[0])

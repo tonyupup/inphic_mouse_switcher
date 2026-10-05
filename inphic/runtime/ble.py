@@ -18,6 +18,7 @@ import logging
 import threading
 import time
 
+from inphic.protocol.status import KIND_COMMAND_ACK
 from inphic.protocol.bluetooth import NOTIFY_UUID, SERVICE_UUID, WRITE_UUID, parse_address, report_from_notification
 
 LOG = logging.getLogger("inphic.ble")
@@ -114,8 +115,11 @@ class BleChannel:
     label = "蓝牙"
     supports_polling_rate = False
 
+    # 宏消息(0x09)的应答没在真机上见过(已见 0c/04/05/07/08), 所以它的应答是可选的: 没等到只警告, 不当成失败
+    ACK_OPTIONAL = frozenset({0x09})
+
     def __init__(self, address: str, *, packet_delay_ms: int = 200, listener=None, on_raw=None, on_disconnect=None,
-                 open_session=None, timeout_s: float = 15.0):
+                 open_session=None, timeout_s: float = 15.0, ack_timeout_s: float = 2.0, ack_retries: int = 2):
         self.address = parse_address(address)
         self.packet_delay_s = packet_delay_ms / 1000.0
         self.listener = listener
@@ -123,6 +127,10 @@ class BleChannel:
         self.on_disconnect = on_disconnect
         self._open_session = open_session or WinrtSession.open
         self._timeout = timeout_s
+        self.ack_timeout_s = ack_timeout_s
+        self.ack_retries = ack_retries
+        self._acks: list[tuple[int, int]] = []          # 收到的命令应答 (命令字, 结果; 0=成功), 真机验证: 93 50 00 <命令字>
+        self._ack_cond = threading.Condition()
         self._lock = threading.Lock()
         self._session = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -143,6 +151,10 @@ class BleChannel:
 
     def _on_notify(self, data: bytes) -> None:
         report = report_from_notification(data)
+        if report is not None and report.kind == KIND_COMMAND_ACK:
+            with self._ack_cond:
+                self._acks.append((report.b, report.a))
+                self._ack_cond.notify_all()
         handler, arg = (self.listener, report) if report is not None else (self.on_raw, bytes(data))
         if handler is not None:                      # 无论能不能解析都交出去, 不丢
             try:
@@ -194,6 +206,37 @@ class BleChannel:
             device.close()
 
     # ---- 发送 ----
+    def _wait_ack(self, cmd: int) -> int | None:
+        """等命令 cmd 的应答, 返回结果字节(0=成功); 超时返回 None。其他命令的应答忽略。"""
+        deadline = time.monotonic() + self.ack_timeout_s
+        with self._ack_cond:
+            while True:
+                for i, (c, result) in enumerate(self._acks):
+                    if c == cmd:
+                        del self._acks[i]
+                        return result
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return None
+                self._ack_cond.wait(left)
+
+    def _write_acked(self, session, payload: bytes) -> None:
+        cmd = payload[0]
+        for attempt in range(self.ack_retries + 1):
+            with self._ack_cond:
+                self._acks = [a for a in self._acks if a[0] != cmd]        # 丢掉上一轮残留的同命令应答
+            self._run(session.write(payload))
+            result = self._wait_ack(cmd)
+            if result == 0:
+                return
+            if result is not None:
+                raise RuntimeError(f"鼠标拒绝了命令 {cmd:#04x}（应答结果 {result:#04x}）")
+            if cmd in self.ACK_OPTIONAL:
+                LOG.warning("命令 %#04x 没有收到应答（该命令的应答没在真机上见过, 当作已发送）", cmd)
+                return
+            LOG.warning("命令 %#04x 没有收到应答, 重发（第 %d/%d 次）", cmd, attempt + 1, self.ack_retries)
+        raise RuntimeError(f"命令 {cmd:#04x} 重发 {self.ack_retries} 次仍没有收到应答")
+
     def send_payloads(self, payloads: list[bytes], delay_s: float | None = None) -> None:
         """依次把载荷写进 FEE3, 间隔 delay_s(默认 200 ms, 与 HUB 一致)。失败丢掉会话并重新抛出。"""
         delay = self.packet_delay_s if delay_s is None else delay_s
@@ -201,7 +244,7 @@ class BleChannel:
             try:
                 session = self._ensure_session()
                 for i, payload in enumerate(payloads):
-                    self._run(session.write(bytes(payload)))
+                    self._write_acked(session, bytes(payload))
                     if i != len(payloads) - 1:
                         time.sleep(delay)
             except Exception:

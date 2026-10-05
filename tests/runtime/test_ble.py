@@ -8,7 +8,10 @@ from inphic.runtime.ble import BleChannel
 
 
 class FakeSession:
-    def __init__(self, fail_on=None):
+    """假 GATT 会话。ack 控制写入后鼠标的应答: 'ok' 回 93 50 00 <命令字>, 'none' 不回, 'err' 回结果 1。"""
+
+    def __init__(self, fail_on=None, ack="ok"):
+        self.ack = ack
         self.writes = []
         self.connected = True
         self.closed = False
@@ -19,6 +22,8 @@ class FakeSession:
         if self.fail_on is not None and len(self.writes) == self.fail_on:
             raise RuntimeError("write failed")
         self.writes.append(payload)
+        if self.ack == "ok" or (self.ack == "err"):
+            self.on_notify(bytes([0x93, 0x50, 0x00 if self.ack == "ok" else 0x01, payload[0]]))
 
     async def close(self):
         self.closed = True
@@ -33,6 +38,7 @@ def make_channel(sessions, **kw):
         opened.append(s)
         return s
 
+    kw.setdefault("ack_timeout_s", 0.05)
     ch = BleChannel("78:87:11:75:9D:56", packet_delay_ms=0, open_session=open_session, **kw)
     return ch, opened
 
@@ -49,6 +55,38 @@ class BleChannelTest(unittest.TestCase):
         self.assertEqual([p[0] for p in sent], [0x0C, 0x04, 0x05, 0x07, 0x08])     # 没有 0x06 回报率
         self.assertEqual(sent, self.profile.build_payloads(include_polling=False))
         self.assertTrue(all(len(p) == p[1] for p in sent))                          # 原始载荷: 长度字节 = 长度, 无帧头
+
+    def test_missing_ack_retries_then_fails(self):
+        sess = FakeSession(ack="none")
+        ch, _ = make_channel([sess])
+        self.addCleanup(ch.close)
+        with self.assertLogs("inphic.ble", level="WARNING"), self.assertRaises(RuntimeError) as cm:
+            ch.send_profile(self.profile)
+        self.assertIn("没有收到应答", str(cm.exception))
+        self.assertEqual(len(sess.writes), 3)                  # 1 次 + 重发 2 次, 且都是第一条命令 0x0c
+        self.assertEqual({w[0] for w in sess.writes}, {0x0C})
+
+    def test_nonzero_ack_is_rejection(self):
+        ch, _ = make_channel([FakeSession(ack="err")])
+        self.addCleanup(ch.close)
+        with self.assertRaises(RuntimeError) as cm:
+            ch.send_profile(self.profile)
+        self.assertIn("拒绝", str(cm.exception))
+
+    def test_macro_without_ack_is_only_a_warning(self):
+        class MacroNoAck(FakeSession):
+            async def write(self, payload):
+                self.writes.append(payload)
+                if payload[0] != 0x09:
+                    self.on_notify(bytes([0x93, 0x50, 0x00, payload[0]]))
+
+        profile = from_config("m", {"buttons": {"side_front": {"type": "macro", "start": "loop", "steps": [{"tap": "a"}]}}})
+        sess = MacroNoAck()
+        ch, _ = make_channel([sess])
+        self.addCleanup(ch.close)
+        with self.assertLogs("inphic.ble", level="WARNING"):
+            ch.send_profile(profile)
+        self.assertEqual([w[0] for w in sess.writes], [0x0C, 0x04, 0x05, 0x07, 0x08, 0x09])
 
     def test_failed_write_drops_session_and_reopens(self):
         first, second = FakeSession(fail_on=2), FakeSession()

@@ -16,7 +16,9 @@ import time
 
 from inphic.config import AppConfig
 from inphic.runtime.channel import HidChannel
+from inphic.protocol.status import StatusReport, battery_of
 from inphic.runtime.foreground import get_foreground_process_name
+from inphic.runtime.monitor import BatteryTracker, StatusMonitor
 
 LOG = logging.getLogger("inphic.switcher")
 
@@ -39,11 +41,26 @@ class ProfileSwitcher:
         self._state_lock = threading.Lock()
         self._was_present = True
         self._next_presence_check = 0.0
+        self._battery = BatteryTracker()
+        self.monitor = StatusMonitor(
+            dev_cfg["vendor_id"], dev_cfg["product_id"], self._on_status, on_disconnect=self._battery.reset
+        )
+
+    def _on_status(self, report: StatusReport) -> None:
+        bat = battery_of(report)
+        if bat is None:
+            return
+        for level, text in self._battery.update(bat):
+            LOG.log(logging.WARNING if level == "warning" else logging.INFO, text)
+
+    def close(self) -> None:
+        self.monitor.stop()
+        self.channel.close()
 
     def _start_apply(self, name: str):
         profile = self.config.profiles.get(name)
         if profile is None:
-            LOG.warning("配置里没有名为 %s 的 profile", name)
+            LOG.warning("配置里没有名为「%s」的方案", name)
             self.desired = None
             return
         delay_s = self.config.packet_delay_ms / 1000.0
@@ -51,13 +68,13 @@ class ProfileSwitcher:
 
         def worker():
             try:
-                LOG.info("切换到 profile: %s (按钮: %s)", name, profile.current_buttons())
+                LOG.info("切换到方案「%s」", name)
                 self.channel.send_frames(profile.build_packets(), delay_s)
                 with self._state_lock:
                     self.applied = name
-                LOG.info("profile %s 应用完成", name)
+                LOG.info("方案「%s」应用完成", name)
             except Exception:
-                LOG.exception("应用 profile %s 失败, %.0f 秒后重试", name, self.RETRY_DELAY_S)
+                LOG.exception("应用方案「%s」失败, %.0f 秒后重试", name, self.RETRY_DELAY_S)
                 self._retry_at = time.monotonic() + self.RETRY_DELAY_S
             finally:
                 self._applying = False
@@ -89,6 +106,7 @@ class ProfileSwitcher:
         poll_interval = self.config.poll_interval_ms / 1000.0
         last_process = object()
         LOG.info("开始监听前台窗口切换 (Ctrl+C 退出)")
+        self.monitor.start()
         while True:
             process_name = self._foreground()
             if process_name != last_process:

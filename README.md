@@ -8,6 +8,7 @@
 ```powershell
 uv sync                                   # 安装依赖
 uv run python -m inphic run               # 常驻运行：进入 crossfire.exe 用 cf 方案，其他程序用 default
+uv run python -m inphic show              # 用中文打印配置里每个方案的设置（只读，不碰鼠标）
 uv run python -m inphic status            # 读一次电量（只读）
 uv run python -m inphic macros list       # 看宏库里有哪些宏（只读）
 ```
@@ -17,7 +18,8 @@ uv run python -m inphic macros list       # 看宏库里有哪些宏（只读）
 
 | 命令 | 作用 |
 |---|---|
-| `python -m inphic run [-c 配置]` | 监听前台程序，切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用 |
+| `python -m inphic run [-c 配置]` | 启动先用中文打印当前设置，然后监听前台程序、切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用；电量变化实时写进日志（≤20%、≤10% 各警告一次） |
+| `python -m inphic show [-c 配置]` | 只打印上面那份中文设置摘要，不连鼠标（★ = 与出厂默认不同的按钮） |
 | `python -m inphic status [--watch]` | 读鼠标主动上报的状态（电量等）；`--watch` 持续打印，可观察 DPI 键 |
 | `python -m inphic macros list \| show <分组.名字>` | 查看宏库，展开后的步骤、占几个槽位、播放多久 |
 
@@ -45,7 +47,7 @@ inphic/
     channel      HID 通道：找集合、写帧、检测在线
     foreground   前台程序检测
     switcher     切换循环：重试、断线重连
-  cli/        命令行入口（run / status / macros）
+  cli/        命令行入口（run / show / status / macros）
 config.yaml   你的配置        macros/   宏库示例        docs/   使用说明
 tests/        单元测试，按包分目录；fixtures/ 是真实 USB 抓包提取的帧
 ```

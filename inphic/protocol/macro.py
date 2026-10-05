@@ -51,6 +51,13 @@ START_MODES: dict[str, int] = {
     "stop_on_this_key": 3,   # 当前按键按下停止播放  (macro_4 抓包)
 }
 
+START_MODE_LABELS_CN: dict[str, str] = {      # HUB 语言包 select_macro_4/5/6/8_text
+    "loop": "循环次数播放",
+    "stop_on_any_key": "任意键按下停止播放",
+    "hold": "按住播放，松开停止",
+    "stop_on_this_key": "当前按键按下停止播放",
+}
+
 MOVE_OPCODE = 0xF6
 EXT_DELAY_OPCODE = 0x03
 CONTINUE_OPCODE = 0xFE

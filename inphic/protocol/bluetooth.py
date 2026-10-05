@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from inphic.protocol.status import STATUS_REPORT_ID, StatusReport, parse_report
 
 SERVICE_UUID = "0000fee0-0000-1000-8000-00805f9b34fb"
@@ -28,4 +30,5 @@ def parse_address(text: str) -> int:
 
 def report_from_notification(data: bytes) -> StatusReport | None:
     """FEE4 通知 -> StatusReport; 不是状态报告返回 None。"""
-    return parse_report(bytes([STATUS_REPORT_ID]) + bytes(data))
+    report = parse_report(bytes([STATUS_REPORT_ID]) + bytes(data))
+    return None if report is None else replace(report, raw=bytes(data))      # raw 记收到的原样字节(不含补回去的 03)

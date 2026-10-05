@@ -41,7 +41,7 @@ class ProfileSwitcher:
             from inphic.runtime.ble import BleChannel              # 延迟导入: 需要 Windows 的 winrt-* 包
             self.ble = BleChannel(
                 str(bt["address"]), packet_delay_ms=bt.get("packet_delay_ms", 200),
-                listener=self._on_status, on_disconnect=self._on_ble_disconnect,
+                listener=self._on_status, on_raw=self._on_raw, on_disconnect=self._on_ble_disconnect,
             )
         # 检测顺序 = 优先级。蓝牙在前: 鼠标走蓝牙时 2.4G 接收器仍插在电脑上(它的 HID 设备一直在),
         # 只有蓝牙连接状态才能说明鼠标此刻在用哪条链路; 鼠标一次只用一条。
@@ -60,7 +60,7 @@ class ProfileSwitcher:
         self._next_presence_check = 0.0
         self._battery = BatteryTracker()
         self.monitor = StatusMonitor(                              # 接收器下读状态(蓝牙的状态通知走 BleChannel)
-            dev_cfg["vendor_id"], dev_cfg["product_id"], self._on_status, on_disconnect=self._battery.reset
+            dev_cfg["vendor_id"], dev_cfg["product_id"], self._on_status, on_raw=self._on_raw, on_disconnect=self._battery.reset
         )
 
     def _on_ble_disconnect(self) -> None:
@@ -74,15 +74,24 @@ class ProfileSwitcher:
         return None
 
     def _on_status(self, report: StatusReport) -> None:
+        """鼠标主动上报的每一条状态都记录: 电量变化/低电量写 INFO/WARNING, 其他类型一律 INFO, 每条原始字节写 DEBUG。"""
+        raw = report.raw.hex(" ") if report.raw else "?"
+        LOG.debug("状态报告 原始 %s", raw)
         bat = battery_of(report)
         if bat is None:
             current = self.config.profiles.get(self.applied or self.desired)
             text = describe_status_change(report, current.profile if current else None)
             if text:
-                LOG.info(text)
+                LOG.info("%s（原始 %s）", text, raw)
+            else:
+                LOG.info("未识别的状态报告: 类型 %#04x a=%#04x b=%#04x（原始 %s）", report.kind, report.a, report.b, raw)
             return
         for level, text in self._battery.update(bat):
             LOG.log(logging.WARNING if level == "warning" else logging.INFO, text)
+
+    def _on_raw(self, data: bytes) -> None:
+        """收到但不是状态报告格式的数据(比如命令的确认应答): 原样记录。"""
+        LOG.info("收到无法解析为状态报告的数据: %s", data.hex(" "))
 
     def close(self) -> None:
         self.monitor.stop()

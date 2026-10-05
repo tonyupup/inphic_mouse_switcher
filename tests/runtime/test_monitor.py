@@ -70,6 +70,24 @@ class FakeDev:
 
 
 class StatusMonitorTest(unittest.TestCase):
+    def test_unparseable_data_goes_to_on_raw(self):
+        ack = [0x04, 0x06, 0xC0, 0x01] + [0] * 60
+        junk = [0x03, 0x00, 0x01]
+        devs = [FakeDev([ack, junk])]
+        raws, done = [], threading.Event()
+
+        def opener():
+            if not devs:
+                done.set()
+                raise OSError("no device")
+            return devs.pop(0)
+
+        m = StatusMonitor(0, 0, lambda r: None, on_raw=raws.append, open_device=opener, retry_s=0.01, poll_ms=1)
+        m.start()
+        self.assertTrue(done.wait(3))
+        m.stop()
+        self.assertEqual([r[:4] for r in raws], [bytes(ack[:4]), bytes(junk)])
+
     def test_reads_reports_and_reconnects(self):
         battery = [0x03, 0x93, 0x40, 0x01, 0x44] + [0] * 59
         other = [0x03, 0x93, 0x20, 0x04, 0x00] + [0] * 59

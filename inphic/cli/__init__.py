@@ -22,7 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="inphic", description="Inphic KP 8K 鼠标自制驱动")
     sub = parser.add_subparsers(dest="command", required=True, metavar="{run,show,status,macros}")
 
-    sub.add_parser("run", parents=[common], help="按前台程序自动切换鼠标方案")
+    p_run = sub.add_parser("run", parents=[common], help="按前台程序自动切换鼠标方案")
+    p_run.add_argument("-v", "--verbose", action="store_true", help="日志里连每条状态报告的原始字节也打印(DEBUG)")
     p_cfg = sub.add_parser("show", parents=[common], help="用中文打印当前设置, 不连接鼠标")
     p_cfg.add_argument("--payloads", action="store_true", help="另外打印每个方案将要发送的字节(干跑, 不发送)")
 
@@ -44,7 +45,7 @@ def main(argv=None) -> int:
     try:
         if args.command == "run":
             from inphic.cli.run import run
-            return run(args.config)
+            return run(args.config, verbose=args.verbose)
         if args.command == "show":
             from inphic.cli.show import show
             return show(args.config, payloads=args.payloads)

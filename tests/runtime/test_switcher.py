@@ -228,6 +228,27 @@ class SwitcherStatusLog(unittest.TestCase):
             self.s._on_status(self._report(0x10, 9))
         self.assertIn("超出", logs.output[0])
 
-    def test_unknown_kind_is_silent(self):
-        with self.assertNoLogs("inphic.switcher", level="INFO"):
-            self.s._on_status(self._report(0x99, 1))
+    def test_unknown_kind_is_logged_not_dropped(self):
+        from inphic.protocol.status import StatusReport
+        rep = StatusReport(kind=0x99, a=1, b=2, raw=bytes.fromhex("03 93 99 01 02 aa"))
+        with self.assertLogs("inphic.switcher", level="INFO") as logs:
+            self.s._on_status(rep)
+        self.assertIn("未识别的状态报告", logs.output[0])
+        self.assertIn("03 93 99 01 02 aa", logs.output[0])            # 连多出来的字节也保留
+
+    def test_known_non_battery_report_also_shows_raw_bytes(self):
+        from inphic.protocol.status import StatusReport
+        with self.assertLogs("inphic.switcher", level="INFO") as logs:
+            self.s._on_status(StatusReport(kind=0x10, a=2, b=0, raw=bytes.fromhex("03 93 10 02 00")))
+        self.assertIn("03 93 10 02 00", logs.output[0])
+
+    def test_unparseable_data_is_logged(self):
+        with self.assertLogs("inphic.switcher", level="INFO") as logs:
+            self.s._on_raw(bytes.fromhex("04 06 c0 01"))
+        self.assertIn("04 06 c0 01", logs.output[0])
+
+    def test_every_report_raw_bytes_at_debug(self):
+        from inphic.protocol.status import StatusReport
+        with self.assertLogs("inphic.switcher", level="DEBUG") as logs:
+            self.s._on_status(StatusReport(kind=0x40, a=1, b=66, raw=bytes.fromhex("03 93 40 01 42")))
+        self.assertTrue(any("03 93 40 01 42" in line for line in logs.output))

@@ -70,6 +70,16 @@ class BleChannelTest(unittest.TestCase):
         opened[0].on_notify(b"\x01\x02")                    # 不是状态报告, 被忽略
         self.assertEqual([(r.kind, r.a, r.b) for r in got], [(0x40, 1, 0x42)])
 
+    def test_unparseable_notifications_go_to_on_raw(self):
+        got, raws = [], []
+        ch, opened = make_channel([FakeSession()], listener=got.append, on_raw=raws.append)
+        self.addCleanup(ch.close)
+        ch.connect()
+        opened[0].on_notify(b"\x01\x02")
+        opened[0].on_notify(bytes.fromhex("93400142ff"))        # 多出来的字节也在 raw 里
+        self.assertEqual(raws, [b"\x01\x02"])
+        self.assertEqual(got[0].raw, bytes.fromhex("93400142ff"))
+
     def test_is_present_follows_session_and_release_notifies(self):
         gone = []
         ch, opened = make_channel([FakeSession()], on_disconnect=lambda: gone.append(1))

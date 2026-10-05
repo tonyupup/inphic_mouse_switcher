@@ -24,7 +24,7 @@ FUN_0045fbd0 / FUN_0045fe20 对这个报告的解析(类型取自 b2, 数值 = a
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 STATUS_REPORT_ID = 0x03
 STATUS_MARKER = 0x93
@@ -47,6 +47,7 @@ class StatusReport:
     kind: int
     a: int          # 第 3 字节(数值低字节)
     b: int          # 第 4 字节(数值高字节)
+    raw: bytes = field(default=b"", compare=False, repr=False)      # 收到的原始字节(含第 5 字节之后的内容), 日志用
 
     @property
     def name(self) -> str:
@@ -71,7 +72,7 @@ def parse_report(data) -> StatusReport | None:
     data = bytes(data)
     if len(data) < 5 or data[0] != STATUS_REPORT_ID or data[1] != STATUS_MARKER:
         return None
-    return StatusReport(kind=data[2], a=data[3], b=data[4])
+    return StatusReport(kind=data[2], a=data[3], b=data[4], raw=data)
 
 
 def battery_of(report: StatusReport | None) -> Battery | None:

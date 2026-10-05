@@ -25,10 +25,13 @@ def _device_section(config_path: str) -> dict:
 
 
 def _print_report(rep, stamp: str) -> None:
+    if isinstance(rep, bytes):                      # 不是状态报告格式的数据, 原样打印
+        print(f"{stamp}  其他数据 {rep.hex(' ')}")
+        return
     if rep.kind == KIND_BATTERY and battery_of(rep):
-        print(f"{stamp}  电量 {battery_of(rep)}")
+        print(f"{stamp}  电量 {battery_of(rep)}  原始 {rep.raw.hex(' ')}")
     else:
-        print(f"{stamp}  {rep.name} a={rep.a:#04x} b={rep.b:#04x} (数值 {rep.value})")
+        print(f"{stamp}  {rep.name} a={rep.a:#04x} b={rep.b:#04x} (数值 {rep.value})  原始 {rep.raw.hex(' ')}")
 
 
 def _reports_hid(dev_cfg: dict):
@@ -44,8 +47,11 @@ def _reports_hid(dev_cfg: dict):
     try:
         while True:
             data = dev.read(64, 500)
-            rep = parse_report(data) if data else None
-            yield rep
+            if not data:
+                yield None
+                continue
+            rep = parse_report(data)
+            yield rep if rep is not None else bytes(data)       # 解析不了的也交出去, 不丢
     finally:
         dev.close()
 
@@ -58,7 +64,7 @@ def _reports_ble(dev_cfg: dict):
     from inphic.runtime.ble import BleChannel
 
     q: queue.Queue = queue.Queue()
-    ch = BleChannel(str(bt["address"]), listener=q.put)
+    ch = BleChannel(str(bt["address"]), listener=q.put, on_raw=q.put)
     try:
         ch.connect()
     except Exception as e:
@@ -100,7 +106,7 @@ def status(config_path: str, watch: bool = False, via: str = "auto") -> int:
         if not watch:
             while time.monotonic() - t0 < 8.0:
                 rep = next(reports)
-                if rep is not None and battery_of(rep):
+                if rep is not None and not isinstance(rep, bytes) and battery_of(rep):
                     print(f"电量: {battery_of(rep)}")
                     return 0
             print("8 秒内没有收到电量报告(鼠标可能在休眠, 动一下鼠标再试)", file=sys.stderr)

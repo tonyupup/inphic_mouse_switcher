@@ -59,9 +59,10 @@ class BatteryTracker:
 class StatusMonitor:
     """后台线程: 打开状态集合, 把解析出的 StatusReport 交给 on_report。"""
 
-    def __init__(self, vendor_id: int, product_id: int, on_report, *, on_disconnect=None,
+    def __init__(self, vendor_id: int, product_id: int, on_report, *, on_raw=None, on_disconnect=None,
                  open_device=None, retry_s: float = 3.0, poll_ms: int = 500):
         self._on_report = on_report
+        self._on_raw = on_raw
         self._on_disconnect = on_disconnect
         self._open = open_device or (lambda: _open_status_collection(vendor_id, product_id))
         self._retry_s = retry_s
@@ -96,9 +97,13 @@ class StatusMonitor:
             try:
                 while not self._stop.is_set():
                     data = dev.read(64, self._poll_ms)
-                    rep = parse_report(data) if data else None
+                    if not data:
+                        continue
+                    rep = parse_report(data)
                     if rep is not None:
                         self._on_report(rep)
+                    elif self._on_raw is not None:           # 不是状态报告的数据也不丢: 交给调用方记录
+                        self._on_raw(bytes(data))
             except Exception:
                 LOG.warning("状态监听: 读取失败(鼠标断开或休眠?), 等待重连")
             finally:

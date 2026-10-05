@@ -114,11 +114,12 @@ class BleChannel:
     label = "蓝牙"
     supports_polling_rate = False
 
-    def __init__(self, address: str, *, packet_delay_ms: int = 200, listener=None, on_disconnect=None,
+    def __init__(self, address: str, *, packet_delay_ms: int = 200, listener=None, on_raw=None, on_disconnect=None,
                  open_session=None, timeout_s: float = 15.0):
         self.address = parse_address(address)
         self.packet_delay_s = packet_delay_ms / 1000.0
         self.listener = listener
+        self.on_raw = on_raw
         self.on_disconnect = on_disconnect
         self._open_session = open_session or WinrtSession.open
         self._timeout = timeout_s
@@ -142,9 +143,10 @@ class BleChannel:
 
     def _on_notify(self, data: bytes) -> None:
         report = report_from_notification(data)
-        if report is not None and self.listener is not None:
+        handler, arg = (self.listener, report) if report is not None else (self.on_raw, bytes(data))
+        if handler is not None:                      # 无论能不能解析都交出去, 不丢
             try:
-                self.listener(report)
+                handler(arg)
             except Exception:
                 LOG.exception("处理蓝牙状态通知出错")
 

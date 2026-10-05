@@ -1,0 +1,14 @@
+[project]
+name = "inphic-switcher"
+version = "0.1.0"
+description = "Inphic IN 系列鼠标的自定义驱动: 前台程序切换配置, 直接构造设备命令, 不依赖官方 HUB"
+requires-python = ">=3.11"
+dependencies = [
+    "hidapi>=0.14",
+    "psutil>=5.9",
+    "PyYAML>=6.0",
+]
+
+[tool.uv]
+# 脚本式项目: 模块是平铺的 .py 文件, 不打包, 只用 uv 管理环境和依赖
+package = false

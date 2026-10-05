@@ -1,0 +1,29 @@
+# 射击游戏用的宏。演示: yaml 锚点、同分组引用、跨分组引用、绑定处覆盖
+group: fps
+
+# 锚点定义放在 x- 开头的顶层键下: 一次快速左键点击 (鼠标左键的键码已抓包验证)
+x-fast-click: &fast_click
+  - { down: mouse_left, delay_ms: 20 }
+  - { up: mouse_left, delay_ms: 20 }
+
+macros:
+  rapid_fire:
+    description: 按住侧键时持续连点左键, 松开停止
+    start: hold
+    steps: [*fast_click]          # 嵌套列表会被摊平
+
+  triple_click:
+    description: 快速点三下
+    steps: [*fast_click, *fast_click, *fast_click]
+
+  burst_then_reload:
+    description: 点三下然后按 R 换弹 (引用同分组的 triple_click)
+    steps:
+      - { use: triple_click }
+      - { tap: r, delay_ms: 100 }
+
+  reload_and_copy:
+    description: 换弹然后复制 (跨分组引用 common.select_all_copy)
+    steps:
+      - { tap: r, delay_ms: 100 }
+      - { use: common.select_all_copy }

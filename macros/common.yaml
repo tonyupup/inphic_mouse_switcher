@@ -1,0 +1,28 @@
+# 通用小宏。分组名 = common (取自文件名, 也可以写 `group: common`)
+group: common
+macros:
+  tap_a:
+    description: 按一下 A (抓包验证过的最简单的宏)
+    steps:
+      - { tap: a }
+
+  select_all_copy:
+    description: Ctrl+A 然后 Ctrl+C
+    steps:
+      - { down: left_ctrl }
+      - { tap: a }
+      - { tap: c }
+      - { up: left_ctrl }
+
+  paste:
+    description: Ctrl+V
+    steps:
+      - { down: left_ctrl }
+      - { tap: v }
+      - { up: left_ctrl }
+
+  copy_then_paste_3x:
+    description: 全选复制, 然后粘贴三次 (演示 use / times 复用)
+    steps:
+      - { use: select_all_copy }
+      - { use: paste, times: 3 }

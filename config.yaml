@@ -1,0 +1,31 @@
+# 这个文件才是你需要改的——改按键绑定、改规则都在这里，不用碰 templates.yaml
+
+poll_interval_ms: 150
+packet_delay_ms: 520
+
+device:
+  vendor_id: 0x1D57
+  product_id: 0xFA65
+  usage_page: 0xFF00
+  usage: 1
+
+profiles:
+  cf:
+    template: cf  # 对应 templates.yaml 里那组抓包(DPI/灯效等), 按钮表会被下面覆盖
+    buttons:
+      middle_click: { type: key, key: "1" }
+      side_back: { type: key, key: "6" }
+      side_front: { type: key, key: "5" }
+
+  default:
+    template: default
+    buttons:
+      middle_click: { type: function, id: 4 }
+      side_back: { type: function, id: 5 }
+      side_front: { type: function, id: 6 }
+
+rules:
+  - process: "crossfire.exe"
+    profile: "cf"
+  - process: "*"
+    profile: "default"

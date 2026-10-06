@@ -31,6 +31,7 @@ profiles:
       middle_click: { type: key, key: "1" }     # 中键 → 按 1
       side_back:    { type: key, key: "6" }     # 后退侧键 → 按 6
       side_front:   { type: key, key: "5" }     # 前进侧键 → 按 5
+      #3:            { type: key, key: "a" }     # 第四个键(试验: 看是不是 DPI 键) → 按 a
       # 想换成别的，把上面某一行改成下面这些之一（去掉开头的 #）：
       #   side_front: { type: key, key: "c", modifiers: [ctrl] }   # 按 Ctrl+C
       #   side_front: { type: shortcut, action: copy }             # 复制
@@ -44,6 +45,8 @@ profiles:
     light:
       mode: off                   # 灯光：关闭
     # 按钮没写 = 出厂默认
+    buttons:
+      # 3:            { type: key, key: "a" }
     dpi:
       levels:  [800, 1600, 3200, 6500, 13000, 26000, 500, 500]       # 8 档的 DPI，必须是 50 的整数倍（50–26000）
       enabled: [true, true, true, true, true, true, false, false]    # 哪些档可以用鼠标上的 DPI 键切到

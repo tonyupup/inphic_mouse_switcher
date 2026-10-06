@@ -117,29 +117,42 @@ def apply_config(profile: HubProfile, cfg: dict, library=None) -> None:
             )
 
     dpi = cfg.get("dpi") or {}
+    if isinstance(dpi, int) and not isinstance(dpi, bool):
+        dpi = {"levels": [dpi], "current": dpi}            # 简写: dpi: 1600 = 只用这一个 DPI
     extra = set(dpi) - {"levels", "enabled", "current", "colors"}
     if extra:
         raise ValueError(f"dpi 里有不认识的键: {sorted(extra)}, 可选: levels, enabled, current, colors")
     if "levels" in dpi:
-        if len(dpi["levels"]) != DPI_LEVELS:
-            raise ValueError(f"dpi.levels 需要正好 {DPI_LEVELS} 个值")
-        for i, v in enumerate(dpi["levels"]):
+        levels = list(dpi["levels"])
+        if not 1 <= len(levels) <= DPI_LEVELS:
+            raise ValueError(f"dpi.levels 需要 1..{DPI_LEVELS} 个值(没写到的档位不启用)")
+        for i, v in enumerate(levels):
             if not (DPI_MIN <= v <= DPI_MAX and v % DPI_STEP == 0):
                 raise ValueError(f"dpi 档位 {v} 不合法: 需要 {DPI_MIN}..{DPI_MAX} 之间 {DPI_STEP} 的整数倍")
             profile.set_i32(0x2804 + 4 * i, v // DPI_STEP)
+        if "enabled" not in dpi and len(levels) < DPI_LEVELS:
+            dpi = {**dpi, "enabled": [True] * len(levels)}
     if "enabled" in dpi:
-        if len(dpi["enabled"]) != DPI_LEVELS:
-            raise ValueError(f"dpi.enabled 需要正好 {DPI_LEVELS} 个布尔值")
-        for i, on in enumerate(dpi["enabled"]):
+        if not 1 <= len(dpi["enabled"]) <= DPI_LEVELS:
+            raise ValueError(f"dpi.enabled 需要 1..{DPI_LEVELS} 个布尔值(没写到的档位不启用)")
+        flags = list(dpi["enabled"]) + [False] * (DPI_LEVELS - len(dpi["enabled"]))
+        for i, on in enumerate(flags):
             profile.set_i32(0x2844 + 4 * i, 1 if on else 0)
     if "current" in dpi:
         cur = int(dpi["current"])
+        if cur > DPI_LEVELS:                               # 大于 8 的当 DPI 值: 找到启用的、值相同的那一档
+            hits = [i for i in range(DPI_LEVELS) if profile.dpi_enabled(i) and profile.dpi(i) == cur]
+            if not hits:
+                raise ValueError(f"dpi.current = {cur}: 启用的档位里没有这个 DPI 值(档位号请写 1..{DPI_LEVELS})")
+            cur = hits[0] + 1
         if not 1 <= cur <= DPI_LEVELS:
             raise ValueError(f"dpi.current = {cur} 超出 1..{DPI_LEVELS}")
         profile.set_i32(0x2874, cur - 1)
+    elif "levels" in dpi and len(dpi["levels"]) < DPI_LEVELS:
+        profile.set_i32(0x2874, 0)                         # 只写了几档又没指定当前档: 用第 1 档
     if "colors" in dpi:
-        if len(dpi["colors"]) != DPI_LEVELS:
-            raise ValueError(f"dpi.colors 需要正好 {DPI_LEVELS} 个 [r, g, b]")
+        if not 1 <= len(dpi["colors"]) <= DPI_LEVELS:
+            raise ValueError(f"dpi.colors 需要 1..{DPI_LEVELS} 个 [r, g, b]")
         for i, rgb in enumerate(dpi["colors"]):
             r, g, b = rgb
             if not all(0 <= v <= 255 for v in (r, g, b)):

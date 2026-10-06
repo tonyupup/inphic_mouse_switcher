@@ -36,6 +36,7 @@ profiles:
       #   side_front: { type: shortcut, action: copy }             # 复制
       #   side_front: { type: media, action: volume_up }           # 音量加
       #   side_front: { type: macro, ref: fps.rapid_fire }         # 运行宏库里的宏
+    dpi: 1600                     # 简写: 只用这一个 DPI
 
   # ---- 平时用的方案 ----
   default:
@@ -43,7 +44,11 @@ profiles:
     light:
       mode: off                   # 灯光：关闭
     # 按钮没写 = 出厂默认
-
+    dpi:
+      levels:  [800, 1600, 3200, 6500, 13000, 26000, 500, 500]       # 8 档的 DPI，必须是 50 的整数倍（50–26000）
+      enabled: [true, true, true, true, true, true, false, false]    # 哪些档可以用鼠标上的 DPI 键切到
+      current: 3                # 切到这个方案时用第几档（1–8），这里是 1600
+      colors:  [[255,255,0], [0,255,255], [0,255,0], [255,0,255], [0,0,255], [255,0,0], [255,64,0], [255,255,255]]
 # 切换规则：前台是哪个程序，就用哪个方案。从上往下找，第一个匹配的生效。
 rules:
   - process: "crossfire.exe"      # 进入穿越火线 → cf 方案

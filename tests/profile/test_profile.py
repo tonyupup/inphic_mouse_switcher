@@ -115,7 +115,9 @@ class SemanticConfig(unittest.TestCase):
             {"dpi": {"current": 9}},
             {"dpi": {"current": 7}},
             {"dpi": {"enabled": [True, False, True, True, True, True, False, False]}},   # 禁用了当前档(第 2 档)
-            {"dpi": {"colors": [[0, 0, 0]]}},
+            {"dpi": {"levels": []}},
+            {"dpi": {"levels": [800] * 9}},
+            {"dpi": {"current": 1700}},            # 启用的档里没有 1700
             {"dpi": {"colors": [[0, 0, 300]] * 8}},
             {"dpi": {"step": 1}},
             {"performance": {"sleep": 1}},
@@ -189,6 +191,22 @@ class DpiConfig(unittest.TestCase):
         lv[0] = 400                                   # 存档值 8 -> 线上 7
         pl = parse_frame(from_config("x", {"dpi": {"levels": lv}}).build_packets()[1])
         self.assertEqual(pl[8], 7)
+
+    def test_short_levels_disable_the_rest(self):
+        p = from_config("x", {"dpi": {"levels": [800, 1600]}}).profile
+        self.assertEqual([p.dpi_enabled(i) for i in range(8)], [True, True] + [False] * 6)
+        self.assertEqual((p.dpi(0), p.dpi(1), p.dpi_current), (800, 1600, 0))
+
+    def test_current_accepts_dpi_value(self):
+        p = from_config("x", {"dpi": {"levels": [800, 1600, 3200], "current": 1600}}).profile
+        self.assertEqual(p.dpi_current, 1)
+        p = from_config("x", {"dpi": {"levels": [800, 1600, 3200], "current": 3}}).profile     # 小数字仍是档位号
+        self.assertEqual(p.dpi_current, 2)
+
+    def test_scalar_dpi_shorthand(self):
+        p = from_config("x", {"dpi": 1600}).profile
+        self.assertEqual((p.dpi(0), p.dpi_current), (1600, 0))
+        self.assertEqual([p.dpi_enabled(i) for i in range(8)], [True] + [False] * 7)
 
     def test_max_dpi_uses_both_bytes(self):
         pl = parse_frame(from_config("x", {"dpi": {"levels": self.FACTORY_LEVELS}}).build_packets()[1])

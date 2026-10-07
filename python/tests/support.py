@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
-FIXTURES = Path(__file__).resolve().parent / "fixtures"
+ROOT = Path(__file__).resolve().parent.parent.parent      # 仓库根目录(config.yaml、macros/、fixtures/ 与 Rust 版共用)
+FIXTURES = ROOT / "fixtures"
 
 
 def captured_frames() -> list[bytes]:

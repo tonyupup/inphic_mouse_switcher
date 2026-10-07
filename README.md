@@ -6,11 +6,12 @@
 ## 快速开始
 
 ```powershell
-uv sync                                   # 安装依赖
-uv run python -m inphic run               # 常驻运行：进入 crossfire.exe 用 cf 方案，其他程序用 default
-uv run python -m inphic show              # 用中文打印配置里每个方案的设置（只读，不碰鼠标）
-uv run python -m inphic status            # 读一次电量（只读；蓝牙连着时自动走蓝牙）
-uv run python -m inphic macros list       # 看宏库里有哪些宏（只读）
+# Rust 版在 rust/ 目录(Python 原版在 python/ 目录, 两者共用根目录的 config.yaml / macros / fixtures)
+cd rust && cargo build --release          # 编译(Windows; 产物 rust/target/release/inphic.exe)
+cargo run --release -- -c ../config.yaml run               # 常驻运行：进入 crossfire.exe 用 cf 方案，其他程序用 default
+cargo run --release -- -c ../config.yaml show              # 用中文打印配置里每个方案的设置（只读，不碰鼠标）
+cargo run --release -- -c ../config.yaml status            # 读一次电量（只读；蓝牙连着时自动走蓝牙）
+cargo run --release -- -c ../config.yaml macros list       # 看宏库里有哪些宏（只读）
 ```
 
 配置写在 [`config.yaml`](config.yaml)，写法和每种选项见 **[docs/配置说明.md](docs/配置说明.md)**（每种用法一个可复制的例子）。
@@ -18,10 +19,10 @@ uv run python -m inphic macros list       # 看宏库里有哪些宏（只读）
 
 | 命令 | 作用 |
 |---|---|
-| `python -m inphic run [-c 配置]` | 启动先用中文打印当前设置，然后监听前台程序、切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用；电量变化实时写进日志（≤20%、≤10% 各警告一次）；按鼠标上的 DPI 键会记一行「DPI 档位切换到第 N 档 = X DPI」 |
-| `python -m inphic show [-c 配置] [--payloads]` | 只打印上面那份中文设置摘要，不连鼠标（★ = 与出厂默认不同的按钮）；`--payloads` 另外打印将要发送的字节（干跑） |
-| `python -m inphic status [--watch] [--via bluetooth]` | 读鼠标主动上报的状态（电量等）；`--watch` 持续打印，可观察 DPI 键；蓝牙时不能和 HUB / `run` 同时用 |
-| `python -m inphic macros list \| show <分组.名字>` | 查看宏库，展开后的步骤、占几个槽位、播放多久 |
+| `inphic run [-c 配置]` | 启动先用中文打印当前设置，然后监听前台程序、切换方案；写失败每 3 秒重试，鼠标拔插后自动重新应用；电量变化实时写进日志（≤20%、≤10% 各警告一次）；按鼠标上的 DPI 键会记一行「DPI 档位切换到第 N 档 = X DPI」 |
+| `inphic show [-c 配置] [--payloads]` | 只打印上面那份中文设置摘要，不连鼠标（★ = 与出厂默认不同的按钮）；`--payloads` 另外打印将要发送的字节（干跑） |
+| `inphic status [--watch] [--via bluetooth]` | 读鼠标主动上报的状态（电量等）；`--watch` 持续打印，可观察 DPI 键；蓝牙时不能和 HUB / `run` 同时用 |
+| `inphic macros list \| show <分组.名字>` | 查看宏库，展开后的步骤、占几个槽位、播放多久 |
 
 ## 代码结构
 
@@ -58,7 +59,7 @@ tests/        单元测试，按包分目录；fixtures/ 是真实 USB 抓包提
 ## 测试
 
 ```powershell
-uv run python -m unittest discover -s tests -t .
+cargo test                                # 在 rust/ 下; Python 版在 python/ 下 uv run python -m unittest discover -s tests -t .
 ```
 
 测试不需要连接鼠标（硬件相关的部分用假的 `hid` 模块）。帧级测试用真实抓包做**逐字节**对照。

@@ -1,0 +1,45 @@
+[package]
+name = "inphic"
+version = "0.3.0"
+edition = "2021"
+description = "Inphic IN 系列鼠标的自定义驱动: 前台程序切换配置, 直接构造设备命令, 不依赖官方 HUB"
+default-run = "inphic"
+
+[lib]
+name = "inphic"
+path = "src/lib.rs"
+
+[[bin]]
+name = "inphic"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+glob = "0.3"
+indexmap = "2"
+log = "0.4"
+serde_yaml = "0.9"
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2", default-features = false, features = ["windows-native"] }
+windows = { version = "0.58", features = [
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_WinRT",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+flate2 = "1"
+
+[profile.release]
+lto = true
+strip = true

@@ -1,4 +1,4 @@
-# 鼠标配置。运行: uv run python -m inphic run
+# 鼠标配置。运行: inphic.exe run
 # 每一项怎么写、有哪些可选值，都在 docs/配置说明.md 里，每种用法有一个可以直接复制的例子。
 # 方案里没写的项 = 出厂默认，所以只需要写你想改的。
 
@@ -17,7 +17,7 @@ device:                   # 鼠标的 USB 标识，一般不用改
     address: "78:87:11:75:9D:56"     # 鼠标的蓝牙地址（Inphic IN10）
 
 # 宏库：宏放在 macros 目录下的 yaml 文件里，按分组整理（详见 docs/配置说明.md 第 4 节）。
-# 看有哪些宏： uv run python -m inphic macros list
+# 看有哪些宏： inphic.exe macros list
 macro_files:
   - macros/*.yaml
 
@@ -47,11 +47,11 @@ profiles:
     # 按钮没写 = 出厂默认
     buttons:
       # 3:            { type: key, key: "a" }
-    dpi:
-      levels:  [800, 1600, 3200, 6500, 13000, 26000, 500, 500]       # 8 档的 DPI，必须是 50 的整数倍（50–26000）
-      enabled: [true, true, true, true, true, true, false, false]    # 哪些档可以用鼠标上的 DPI 键切到
-      current: 3                # 切到这个方案时用第几档（1–8），这里是 1600
-      colors:  [[255,255,0], [0,255,255], [0,255,0], [255,0,255], [0,0,255], [255,0,0], [255,64,0], [255,255,255]]
+    dpi: 2000
+      #levels:  [800, 1600, 3200, 6500, 13000, 26000, 500, 500]       # 8 档的 DPI，必须是 50 的整数倍（50–26000）
+      #enabled: [true, true, true, true, true, true, false, false]    # 哪些档可以用鼠标上的 DPI 键切到
+      #current: 3                # 切到这个方案时用第几档（1–8），这里是 1600
+      #colors:  [[255,255,0], [0,255,255], [0,255,0], [255,0,255], [0,0,255], [255,0,0], [255,64,0], [255,255,255]]
 # 切换规则：前台是哪个程序，就用哪个方案。从上往下找，第一个匹配的生效。
 rules:
   - process: "crossfire.exe"      # 进入穿越火线 → cf 方案

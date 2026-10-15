@@ -1,6 +1,6 @@
 [package]
 name = "inphic"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Inphic IN 系列鼠标的自定义驱动: 前台程序切换配置, 直接构造设备命令, 不依赖官方 HUB"
 default-run = "inphic"

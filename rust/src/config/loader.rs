@@ -1,6 +1,6 @@
 //! 读取 config.yaml: 设备标识、宏库、各方案、按前台程序切换的规则。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use serde_yaml::{Mapping, Value};
@@ -65,6 +65,8 @@ pub struct AppConfig {
     pub rules: Vec<Rule>,
     pub profiles: IndexMap<String, ConfiguredProfile>,
     pub macro_library: Option<MacroLibrary>,
+    /// 热重载要监视的路径: 配置文件、宏文件及其所在目录(目录用来发现新增/删除的宏文件)。
+    pub watched: Vec<PathBuf>,
 }
 
 impl AppConfig {
@@ -251,7 +253,20 @@ pub fn load_config(config_path: impl AsRef<Path>) -> Result<AppConfig> {
         };
         rules.push(Rule { process, profile: profile.unwrap() });
     }
+    let mut watched = vec![config_path.to_path_buf()];
+    if let Some(lib) = &library {
+        for f in lib.source_files() {
+            let f = PathBuf::from(f);
+            if let Some(dir) = f.parent().filter(|d| !d.as_os_str().is_empty()) {
+                if !watched.iter().any(|w| w == dir) {
+                    watched.push(dir.to_path_buf());
+                }
+            }
+            watched.push(f);
+        }
+    }
     Ok(AppConfig {
+        watched,
         poll_interval_ms: ms_field(&raw, "poll_interval_ms", 150, &wher)?,
         packet_delay_ms: ms_field(&raw, "packet_delay_ms", 520, &wher)?,
         device,

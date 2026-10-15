@@ -8,7 +8,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, Result};
 use log::Level;
@@ -44,7 +45,8 @@ pub struct State {
 
 /// 切换器和各通道的回调共享的部分: 回调(状态上报、断线)只需要它。
 struct Shared {
-    config: Arc<AppConfig>,
+    /// 当前生效的配置; 热重载时整体替换
+    config: Mutex<Arc<AppConfig>>,
     state: Mutex<State>,
     battery: Mutex<BatteryTracker>,
 }
@@ -92,6 +94,10 @@ fn log_raw(data: &[u8]) {
 }
 
 impl Shared {
+    fn config(&self) -> Arc<AppConfig> {
+        self.config.lock().unwrap().clone()
+    }
+
     /// 鼠标主动上报的每一条状态都记录: 电量变化/低电量写 INFO/WARNING, 其他类型一律 INFO, 每条原始字节写 DEBUG。
     fn on_status(&self, report: StatusReport) {
         let raw = if report.raw.is_empty() { "?".to_string() } else { hex_spaced(&report.raw) };
@@ -101,7 +107,8 @@ impl Shared {
                 let s = self.state.lock().unwrap();
                 s.applied.clone().or_else(|| s.desired.clone())
             };
-            let current = name.and_then(|n| self.config.profiles.get(&n));
+            let config = self.config();
+            let current = name.and_then(|n| config.profiles.get(&n));
             match describe_status_change(&report, current.map(|c| &c.profile)) {
                 Some(text) => log::info!(target: LOG_TARGET, "{text}（原始 {raw}）"),
                 None => log::info!(
@@ -130,6 +137,8 @@ impl ProfileSwitcher {
     pub const RETRY_DELAY: Duration = Duration::from_secs(3);
     /// 多久检查一次设备是否还在
     pub const PRESENCE_CHECK: Duration = Duration::from_secs(2);
+    /// 配置文件最后一次变动通知后等多久再重新加载
+    pub const RELOAD_SETTLE: Duration = Duration::from_millis(300);
 
     /// 按配置建真实通道(只支持 Windows)。
     #[cfg(windows)]
@@ -193,7 +202,7 @@ impl ProfileSwitcher {
         make_parts: impl FnOnce(&Callbacks) -> Result<Parts>,
     ) -> Result<Self> {
         let shared = Arc::new(Shared {
-            config,
+            config: Mutex::new(config),
             state: Mutex::new(State {
                 kind: None,
                 desired: None,
@@ -258,7 +267,7 @@ impl ProfileSwitcher {
     }
 
     fn start_apply(&self, name: &str) {
-        if !self.inner.shared.config.profiles.contains_key(name) {
+        if !self.inner.shared.config().profiles.contains_key(name) {
             log::warn!(target: LOG_TARGET, "配置里没有名为「{name}」的方案");
             self.with_state(|s| s.desired = None);
             return;
@@ -288,7 +297,8 @@ impl ProfileSwitcher {
     }
 
     fn apply_worker(&self, name: &str) -> Result<()> {
-        let profile = &self.inner.shared.config.profiles[name];
+        let config = self.inner.shared.config(); // 整个应用过程用同一份配置, 中途热重载不影响这一次
+        let profile = config.profiles.get(name).ok_or_else(|| anyhow!("配置里没有名为「{name}」的方案"))?;
         let kind = match self.with_state(|s| s.kind).or_else(|| self.detect()) {
             Some(k) => k,
             None => self.inner.channels.first().map(|&(k, _)| k).ok_or_else(|| anyhow!("没有可用的连接通道"))?,
@@ -298,8 +308,13 @@ impl ProfileSwitcher {
         if !ch.supports_polling_rate() {
             log::info!(target: LOG_TARGET, "{}下回报率设置无效, 已跳过回报率命令", ch.label());
         }
-        let delay = (kind == "dongle").then(|| Duration::from_millis(self.inner.shared.config.packet_delay_ms));
+        let delay = (kind == "dongle").then(|| Duration::from_millis(config.packet_delay_ms));
         ch.send_profile(profile, delay)?;
+        // 写的过程中配置被热重载了: 写进去的是旧内容, 不记为已应用, 下一轮按新配置重写
+        if !Arc::ptr_eq(&config, &self.inner.shared.config()) {
+            log::info!(target: LOG_TARGET, "方案「{name}」写入期间配置已重载, 稍后按新配置重新应用");
+            return Ok(());
+        }
         self.with_state(|s| s.applied = Some(name.to_string()));
         log::info!(target: LOG_TARGET, "方案「{name}」应用完成");
         Ok(())
@@ -357,6 +372,46 @@ impl ProfileSwitcher {
         self.with_state(|s| s.was_present = present);
     }
 
+    /// 监视 `watched` 涉及的目录(目录本身, 或文件所在目录), 并撤掉 `old` 里不再需要的; 返回现在监视的目录。
+    fn watch_dirs(
+        w: &mut impl notify::Watcher,
+        watched: &[std::path::PathBuf],
+        old: &[std::path::PathBuf],
+    ) -> Vec<std::path::PathBuf> {
+        let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+        for p in watched {
+            let dir = if p.is_dir() {
+                p.clone()
+            } else {
+                p.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf()
+            };
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+        for d in old.iter().filter(|d| !dirs.contains(d)) {
+            let _ = w.unwatch(d);
+        }
+        dirs.retain(|d| {
+            old.contains(d) || w.watch(d, notify::RecursiveMode::NonRecursive).map_err(|e| {
+                log::warn!(target: LOG_TARGET, "无法监视 {}: {e}", d.display());
+            }).is_ok()
+        });
+        dirs
+    }
+
+    fn try_reload(&self, path: &Path) {
+        match crate::config::load_config(path) {
+            Ok(new) => {
+                log::info!(target: LOG_TARGET, "配置文件有改动, 已重新加载:\n{}", crate::config::describe_config(&new, path));
+                self.reload(new);
+            }
+            Err(e) => {
+                log::error!(target: LOG_TARGET, "重新加载配置失败, 继续使用旧配置: {e}");
+            }
+        }
+    }
+
     pub fn on_status(&self, report: StatusReport) {
         self.inner.shared.on_status(report);
     }
@@ -366,9 +421,44 @@ impl ProfileSwitcher {
         log_raw(data);
     }
 
+    /// 换上新配置并重新应用当前方案。设备/通道在启动时就建好了, 不随配置热更新(device 段变了要重启)。
+    pub fn reload(&self, new: AppConfig) {
+        let old = self.inner.shared.config();
+        if format!("{:?}", old.device) != format!("{:?}", new.device) {
+            log::warn!(target: LOG_TARGET, "device 段有改动, 需要重启程序才能生效");
+        }
+        *self.inner.shared.config.lock().unwrap() = Arc::new(new);
+        self.with_state(|s| {
+            s.applied = None;
+            s.retry_at = None;
+        });
+    }
+
     /// 主循环: 监听前台窗口切换, 直到 `stop` 被置位。
     pub fn run(&self, stop: &AtomicBool) {
-        let poll_interval = Duration::from_millis(self.inner.shared.config.poll_interval_ms);
+        self.run_with_reload(stop, None)
+    }
+
+    /// 同 `run`; 给了 `config_path` 就同时监视配置文件和宏文件, 改动后自动重新加载。
+    /// 新配置有错就报错并继续用旧配置。
+    pub fn run_with_reload(&self, stop: &AtomicBool, config_path: Option<&Path>) {
+        // 用系统的目录变更通知(Windows 的 ReadDirectoryChangesW), 不轮询; 通知只用来"叫醒", 是否真改了再用指纹确认
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = None;
+        let mut watched_dirs: Vec<std::path::PathBuf> = Vec::new();
+        let mut last = Fingerprint::of(&self.inner.shared.config().watched);
+        if config_path.is_some() {
+            match notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
+                let _ = tx.send(ev);
+            }) {
+                Ok(mut w) => {
+                    watched_dirs = Self::watch_dirs(&mut w, &self.inner.shared.config().watched, &[]);
+                    watcher = Some(w);
+                }
+                Err(e) => log::warn!(target: LOG_TARGET, "无法监视配置文件, 改配置后需要重启: {e}"),
+            }
+        }
+        let mut dirty: Option<Instant> = None;
         let mut last_process: Option<Option<String>> = None;
         log::info!(target: LOG_TARGET, "开始监听前台窗口切换 (Ctrl+C 退出)");
         if self.inner.channels.iter().any(|(k, _)| *k == "dongle") {
@@ -377,10 +467,28 @@ impl ProfileSwitcher {
             }
         }
         while !stop.load(Ordering::SeqCst) {
+            while rx.try_recv().is_ok() {
+                dirty = Some(Instant::now());
+            }
+            // 编辑器保存常分几步写: 最后一次通知后安静一会儿再读
+            if let (Some(path), Some(w), Some(t)) = (config_path, watcher.as_mut(), dirty) {
+                if t.elapsed() >= Self::RELOAD_SETTLE {
+                    dirty = None;
+                    if Fingerprint::of(&self.inner.shared.config().watched) != last {
+                        self.try_reload(path);
+                        let watched = self.inner.shared.config().watched.clone();
+                        watched_dirs = Self::watch_dirs(w, &watched, &watched_dirs);
+                        last = Fingerprint::of(&watched);
+                        last_process = None; // 按新规则重新匹配前台进程
+                    }
+                }
+            }
+            let poll_interval = Duration::from_millis(self.inner.shared.config().poll_interval_ms);
             let process_name = (self.inner.foreground)();
             if last_process.as_ref() != Some(&process_name) {
                 log::debug!(target: LOG_TARGET, "前台进程: {process_name:?}");
-                if let Some(profile) = self.inner.shared.config.resolve_profile_name(process_name.as_deref()) {
+                let config = self.inner.shared.config();
+                if let Some(profile) = config.resolve_profile_name(process_name.as_deref()) {
                     self.set_desired(Some(profile));
                 }
                 last_process = Some(process_name);
@@ -395,5 +503,20 @@ impl ProfileSwitcher {
                 std::thread::sleep(Duration::from_millis(20).min(poll_interval));
             }
         }
+    }
+}
+
+/// 一组文件的修改时间和大小, 用来判断有没有改动。
+#[derive(PartialEq)]
+struct Fingerprint(Vec<Option<(SystemTime, u64)>>);
+
+impl Fingerprint {
+    fn of(paths: &[std::path::PathBuf]) -> Self {
+        Fingerprint(
+            paths
+                .iter()
+                .map(|p| std::fs::metadata(p).ok().map(|m| (m.modified().unwrap_or(SystemTime::UNIX_EPOCH), m.len())))
+                .collect(),
+        )
     }
 }

@@ -242,6 +242,11 @@ impl MacroLibrary {
     }
 
     // ---------------- 查询 ----------------
+    /// 宏定义来自哪些文件(热重载时监视用)。
+    pub fn source_files(&self) -> std::collections::BTreeSet<String> {
+        self.raw.values().map(|(_, f)| f.clone()).collect()
+    }
+
     pub fn names(&self) -> Vec<String> {
         self.raw.keys().cloned().collect()
     }

@@ -19,7 +19,7 @@ pub fn run(config_path: &str) -> Result<u8> {
         let stop = stop.clone();
         ctrlc::set_handler(move || stop.store(true, Ordering::SeqCst))?;
     }
-    switcher.run(&stop);
+    switcher.run_with_reload(&stop, Some(Path::new(config_path)));
     log::info!("退出");
     switcher.close();
     Ok(0)

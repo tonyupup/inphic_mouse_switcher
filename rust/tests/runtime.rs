@@ -465,3 +465,52 @@ fn battery_tracker() {
     let mut t = BatteryTracker::new();
     assert_eq!(t.update(bat(5, 1)).iter().filter(|(l, _)| *l == log::Level::Warn).count(), 2); // 一上来就低
 }
+
+// ---------- 配置热重载 ----------
+#[test]
+fn config_file_change_reloads_and_reapplies() {
+    use std::sync::atomic::AtomicBool;
+    let dir = std::env::temp_dir().join(format!("inphic-reload-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("macros")).unwrap();
+    for f in ["common.yaml", "fps.yaml"] {
+        std::fs::copy(root().join("macros").join(f), dir.join("macros").join(f)).unwrap();
+    }
+    let text = std::fs::read_to_string(root().join("config.yaml")).unwrap().replace("packet_delay_ms: 520", "packet_delay_ms: 0");
+    let path = dir.join("config.yaml");
+    std::fs::write(&path, &text).unwrap();
+
+    let hid = fake_hid(true);
+    let ch: Arc<dyn Channel> = Arc::new(HidChannel::new(Arc::new(Backend(hid.clone())), 0x1D57, 0xFA65, 0xFF00, 1));
+    let s = ProfileSwitcher::build(
+        Arc::new(load_config(&path).unwrap()),
+        Box::new(|| Some("crossfire.exe".to_string())),
+        |_| Ok(Parts { channels: vec![("dongle", ch)], monitor: None }),
+    )
+    .unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let t = {
+        let (s, stop, path) = (s.clone(), stop.clone(), path.clone());
+        std::thread::spawn(move || s.run_with_reload(&stop, Some(&path)))
+    };
+    let wait = |want: &str| {
+        for _ in 0..300 {
+            if s.applied().as_deref() == Some(want) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    };
+    assert!(wait("cf"));
+    // crossfire.exe 改成走 default 方案
+    std::fs::write(&path, text.replace("profile: \"cf\"", "profile: \"default\"")).unwrap();
+    assert!(wait("default"), "改配置后应自动重新加载并应用");
+    // 写坏配置: 报错但继续用旧配置
+    std::fs::write(&path, "rules: [").unwrap();
+    std::thread::sleep(Duration::from_millis(800));
+    assert_eq!(s.applied().as_deref(), Some("default"));
+    stop.store(true, Ordering::SeqCst);
+    t.join().unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}

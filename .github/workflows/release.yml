@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 测试
+        working-directory: rust
+        run: cargo test
+      - name: 构建
+        working-directory: rust
+        run: cargo build --release
+      - name: 打包
+        shell: pwsh
+        run: |
+          $name = "inphic-${{ github.ref_name }}-windows-x64"
+          New-Item -ItemType Directory $name | Out-Null
+          Copy-Item rust/target/release/inphic.exe $name/
+          Copy-Item config.yaml, README.md $name/
+          Copy-Item macros, docs -Recurse $name/
+          Compress-Archive $name "$name.zip"
+      - name: 发布
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: inphic-*.zip
+          generate_release_notes: true
